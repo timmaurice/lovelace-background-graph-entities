@@ -14,20 +14,24 @@ interface TranslationObject {
 
 const typedTranslations: { [key: string]: TranslationObject } = translations;
 
-function _getTranslation(language: string, keys: string[]): string | undefined {
-  const translation = keys.reduce(
+function _getTranslation(language: string, key: string): string | undefined {
+  const keys = key.split('.');
+  let translation = keys.reduce(
     (obj, key) => (obj && typeof obj === 'object' ? obj[key] : undefined),
     typedTranslations[language] as string | TranslationObject | undefined,
   );
+
+  if (translation === undefined && language !== 'en') {
+    translation = _getTranslation('en', key);
+  }
+
   return typeof translation === 'string' ? translation : undefined;
 }
 
 export function localize(hass: HomeAssistant, key: string, placeholders: Record<string, string | number> = {}): string {
   const lang = hass.language || 'en';
   const translationKey = key.replace('component.bge.', '');
-  const keyParts = translationKey.split('.');
-
-  const translation = _getTranslation(lang, keyParts) ?? _getTranslation('en', keyParts);
+  const translation = _getTranslation(lang, translationKey);
 
   if (typeof translation === 'string') {
     let finalString = translation;

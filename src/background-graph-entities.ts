@@ -486,18 +486,20 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (this._history.size > 0) this._history = new Map();
       return;
     }
-    const newHistory = new Map<string, { timestamp: Date; value: number }[]>();
-    const historyPromises = this._entities
-      .filter((entityConf) => entityConf.entity)
-      .map(async (entityConf) => {
-        const entityId = entityConf.entity;
-        const history = await this._fetchHistory(entityId);
-        if (history) {
-          newHistory.set(entityId, history);
-        }
-      });
+    const newHistory = new Map<string, { timestamp: Date; value: number }[] | null>();
+    const historyPromises = this._entities.map(async (entityConf) => {
+      const entityId = entityConf.entity;
+      const history = await this._fetchHistory(entityId);
+      newHistory.set(entityId, history);
+    });
     await Promise.all(historyPromises);
-    this._history = newHistory;
+    // Filter out null histories
+    this._history = new Map(
+      [...newHistory.entries()].filter(([, value]) => value !== null) as [
+        string,
+        { timestamp: Date; value: number }[],
+      ][],
+    );
   }
 
   private _downsampleHistory(

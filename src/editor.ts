@@ -71,28 +71,25 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   }
 
   private _handleOutsideClick = (ev: MouseEvent): void => {
-    if (!this._activeColorPicker) {
-      return;
-    }
+    if (!this._activeColorPicker) return;
 
-    const path = ev.composedPath();
+    const target = ev.composedPath()[0] as HTMLElement;
 
     // If the click was on any trigger or inside any popup, do nothing.
-    if (
-      path.some(
-        (el) =>
-          el instanceof HTMLElement &&
-          (el.classList.contains('color-input-wrapper') || el.classList.contains('color-picker-popup')),
-      )
-    ) {
+    if (target.closest('.color-input-wrapper') || target.closest('.color-picker-popup')) {
       return;
     }
 
     // Otherwise, the click was outside, so close the picker.
+    this._closeActiveColorPicker();
+  };
+
+  private _closeActiveColorPicker(): void {
+    if (!this._activeColorPicker) return;
     const popups = this.renderRoot.querySelectorAll<HTMLElement>('.color-picker-popup');
     popups.forEach((p) => (p.style.display = 'none'));
     this._activeColorPicker = null;
-  };
+  }
 
   private _updateEntityOrGlobalConfig(
     entityIndex: number | null,
@@ -123,18 +120,15 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     const targetPopup = this.renderRoot.querySelector<HTMLElement>(`.color-picker-popup[data-picker-id="${pickerId}"]`);
     if (!targetPopup) return;
 
-    const isVisible = targetPopup.style.display !== 'none';
+    const isVisible = this._activeColorPicker === pickerId;
 
     // Hide all popups first
-    const allPopups = this.renderRoot.querySelectorAll<HTMLElement>('.color-picker-popup');
-    allPopups.forEach((p) => (p.style.display = 'none'));
+    this._closeActiveColorPicker();
 
     // If the target was not visible, show it.
     if (!isVisible) {
       targetPopup.style.display = 'block';
       this._activeColorPicker = pickerId;
-    } else {
-      this._activeColorPicker = null;
     }
   }
 
@@ -165,27 +159,27 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     const configValue = target.configValue;
     if (!configValue || !this._config) return;
 
-    const newConfig = { ...this._config };
-    let value: string | number | boolean | undefined;
+    this._updateConfig((config) => {
+      const newConfig = { ...config };
+      let value: string | number | boolean | undefined;
 
-    if (target.tagName?.toLowerCase() === 'ha-switch') {
-      value = target.checked;
-    } else {
-      value = target.value;
-    }
+      if (target.tagName?.toLowerCase() === 'ha-switch') {
+        value = target.checked;
+      } else {
+        value = target.value;
+      }
 
-    if (target.type === 'number') {
-      value = target.value === '' ? undefined : Number(target.value);
-    }
+      if (target.type === 'number') {
+        value = target.value === '' ? undefined : Number(target.value);
+      }
 
-    if (value === false || value === undefined || (typeof value === 'number' && isNaN(value))) {
-      delete newConfig[configValue];
-    } else {
-      newConfig[configValue] = value;
-    }
-
-    this._config = newConfig;
-    fireEvent(this, 'config-changed', { config: newConfig as BackgroundGraphEntitiesConfig });
+      if (value === false || value === undefined || (typeof value === 'number' && isNaN(value))) {
+        delete newConfig[configValue];
+      } else {
+        newConfig[configValue] = value;
+      }
+      return newConfig;
+    });
   }
 
   private _entityAttributeChanged(ev: Event): void {
@@ -193,7 +187,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     const index = Number(target.dataset.index);
     const field = target.dataset.field as keyof EntityConfig;
 
-    if (!this._config || isNaN(index) || !field) return;
+    if (isNaN(index) || !field) return;
 
     let value: string | number | undefined = (ev as CustomEvent).detail?.value ?? target.value;
 
@@ -201,20 +195,15 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
       value = target.value === '' ? undefined : Number(target.value);
     }
 
-    const newEntities = [...this._config.entities];
-    const newEntityConf = { ...newEntities[index] };
-
-    if (value === '' || value === undefined || (typeof value === 'number' && isNaN(value))) {
-      delete newEntityConf[field];
-    } else {
-      newEntityConf[field] = value as never;
-    }
-
-    newEntities[index] = newEntityConf;
-
-    const newConfig = { ...this._config, entities: newEntities };
-    this._config = newConfig;
-    fireEvent(this, 'config-changed', { config: newConfig as BackgroundGraphEntitiesConfig });
+    this._updateEntityOrGlobalConfig(index, (entityConf) => {
+      const newEntityConf = { ...entityConf };
+      if (value === '' || value === undefined || (typeof value === 'number' && isNaN(value))) {
+        delete (newEntityConf as Partial<EntityConfig>)[field];
+      } else {
+        newEntityConf[field] = value as never;
+      }
+      return newEntityConf;
+    });
   }
 
   private _colorPicked(ev: CustomEvent): void {
@@ -329,11 +318,12 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
       return;
     }
 
-    const newEntities = [...this._config.entities];
-    const [draggedItem] = newEntities.splice(this._draggedIndex, 1);
-    newEntities.splice(this._dropIndex, 0, draggedItem);
-
-    this._updateConfig((config) => ({ ...config, entities: newEntities }));
+    this._updateConfig((config) => {
+      const newEntities = [...config.entities];
+      const [draggedItem] = newEntities.splice(this._draggedIndex!, 1);
+      newEntities.splice(this._dropIndex!, 0, draggedItem);
+      return { ...config, entities: newEntities };
+    });
 
     this._handleDragEnd();
   }
@@ -365,10 +355,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
     const isChecked = target.checked;
 
-    this._updateConfig((config) => {
-      const newEntities = [...config.entities];
-      const newEntityConf = { ...newEntities[index] };
-
+    this._updateEntityOrGlobalConfig(index, (entityConf) => {
+      const newEntityConf = { ...entityConf };
       if (isChecked) {
         newEntityConf.overwrite_graph_appearance = true;
       } else {
@@ -377,9 +365,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         delete newEntityConf.line_opacity;
         delete newEntityConf.color_thresholds;
       }
-
-      newEntities[index] = newEntityConf;
-      return { ...config, entities: newEntities };
+      return newEntityConf;
     });
     this.requestUpdate();
   }
@@ -612,7 +598,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             `,
           )}
         </div>
-        <ha-button @click=${() => this._addThreshold(entityIndex)}>
+        <ha-button class="add-threshold-button" @click=${() => this._addThreshold(entityIndex)}>
           ${localize(this.hass, 'component.bge.editor.add_threshold')}
         </ha-button>
       </div>
@@ -901,7 +887,9 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             `,
           )}
         </div>
-        <ha-button @click=${this._addEntity}> ${localize(this.hass, 'component.bge.editor.add_entity')} </ha-button>
+        <ha-button class="add-entity-button" @click=${this._addEntity}>
+          ${localize(this.hass, 'component.bge.editor.add_entity')}
+        </ha-button>
       </div>
     `;
   }

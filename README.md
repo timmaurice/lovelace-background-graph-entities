@@ -71,7 +71,7 @@ The card is fully configurable through the UI editor.
 | `title`            | string  | `''`         | The title of the card.                                                                                                                                                                                                                |
 | `hours_to_show`    | number  | `24`         | The number of hours of history to display in the graphs.                                                                                                                                                                              |
 | `line_width`       | number  | `3`          | The width of the graph line in pixels.                                                                                                                                                                                                |
-| `line_opacity`     | number  | `0.2`        | The opacity of the graph line, from 0.05 (mostly transparent) to 0.8 (more opaque).                                                                                                                                                   |
+| `line_opacity`     | number  | `0.2`        | The opacity of the graph line. The UI slider allows values from 0.05 (mostly transparent) to 0.8 (more opaque).                                                                                                                       |
 | `line_color`       | string  | Theme-aware  | The color of the graph line. Can be any valid CSS color. Defaults to `white` in dark mode and `black` in light mode. Ignored if `color_thresholds` is used.                                                                           |
 | `line_length`      | string  | `long`       | The length of the graph. Can be `long` or `short`. `short` provides more space for the entity value.                                                                                                                                  |
 | `line_glow`        | boolean | `false`      | Adds a subtle glow effect to the graph line.                                                                                                                                                                                          |
@@ -197,3 +197,7 @@ To contribute to the development, you'll need to set up a build environment.
 For further assistance or to report issues, please visit the [GitHub repository](https://github.com/timmaurice/lovelace-background-graph-entities).
 
 ![Star History Chart](https://api.star-history.com/svg?repos=timmaurice/lovelace-background-graph-entities&type=Date)
+
+## ☕ Support My Work
+
+[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="30" />](https://www.buymeacoffee.com/timmaurice)
