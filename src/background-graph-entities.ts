@@ -502,7 +502,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     );
   }
 
-  private _downsampleHistory(
+  protected _downsampleHistory(
     states: { timestamp: Date; value: number }[],
     hours: number,
     pointsPerHour: number,
@@ -520,11 +520,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       values: [],
     }));
 
-    for (const state of states) {
+    // The first state is an anchor point at the start of the graph.
+    // It should not be part of the bucketing, so we skip it.
+    const dataStates = states.slice(1);
+    for (const state of dataStates) {
       const stateTime = state.timestamp.getTime();
       if (stateTime < startTime.getTime()) continue;
 
-      const bucketIndex = Math.floor((stateTime - startTime.getTime()) / interval);
+      const bucketIndex = Math.floor((stateTime - startTime.getTime() - 1) / interval);
       if (bucketIndex >= 0 && bucketIndex < numBuckets) {
         buckets[bucketIndex].values.push(state.value);
       }
@@ -532,31 +535,35 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     const downsampled: { timestamp: Date; value: number }[] = [];
     // The first state is guaranteed by `include_start_time_state: true` to be the value at the start of the window.
-    let lastValue = states[0].value;
+    let lastValue = states.length > 0 ? states[0].value : 0;
 
     for (let i = 0; i < numBuckets; i++) {
-      const bucket = buckets[i];
-      let median: number;
+      const bucket = buckets[i]; // The current bucket of values
+      const bucketTimestamp = new Date(startTime.getTime() + (i + 1) * interval);
+      let valueForBucket: number;
 
       if (bucket.values.length > 0) {
+        // Calculate the median for the bucket's value to reflect its overall state.
         const sortedValues = bucket.values.sort((a, b) => a - b);
         const mid = Math.floor(sortedValues.length / 2);
-        median = sortedValues.length % 2 !== 0 ? sortedValues[mid] : (sortedValues[mid - 1] + sortedValues[mid]) / 2;
-        lastValue = median; // Update last known value
+        valueForBucket =
+          sortedValues.length % 2 !== 0 ? sortedValues[mid] : (sortedValues[mid - 1] + sortedValues[mid]) / 2;
+        // Update lastValue with the actual last measurement in the bucket for carry-forward.
+        lastValue = bucket.values[bucket.values.length - 1];
       } else {
-        // Empty bucket, carry forward the last known value
-        median = lastValue;
+        // If the bucket is empty, use the last known value for this bucket's value.
+        valueForBucket = lastValue;
       }
 
       downsampled.push({
         // Use the end of the bucket interval as the timestamp
-        timestamp: new Date(startTime.getTime() + (i + 1) * interval),
-        value: median,
+        timestamp: bucketTimestamp,
+        value: valueForBucket,
       });
     }
 
     // Add a point at the very beginning to anchor the graph.
-    if (downsampled.length > 0) {
+    if (states.length > 0) {
       downsampled.unshift({ timestamp: startTime, value: states[0].value });
     }
 

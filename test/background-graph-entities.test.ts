@@ -323,4 +323,101 @@ describe('BackgroundGraphEntities', () => {
       expect(d).toContain('L');
     });
   });
+
+  describe('Downsampling Logic (_downsampleHistory)', () => {
+    // Define a type that exposes the protected method for testing purposes.
+    type TestableBackgroundGraphEntities = BackgroundGraphEntitiesType & {
+      _downsampleHistory(
+        states: { timestamp: Date; value: number }[],
+        hours: number,
+        pointsPerHour: number,
+      ): { timestamp: Date; value: number }[];
+    };
+
+    let instance: TestableBackgroundGraphEntities;
+    const hoursToShow = 2;
+    const pointsPerHour = 2;
+    const mockNow = new Date('2023-01-01T12:00:00Z');
+    const startTime = new Date(mockNow.getTime() - hoursToShow * 3600 * 1000); // 10:00:00Z
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+      // The method is protected, so we cast to our test-specific type to access it.
+      instance = new BackgroundGraphEntities() as TestableBackgroundGraphEntities;
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should return raw states if pointsPerHour is 0', () => {
+      const rawStates = [
+        { timestamp: new Date('2023-01-01T11:00:00Z'), value: 10 },
+        { timestamp: new Date('2023-01-01T11:30:00Z'), value: 20 },
+      ];
+      const result = instance._downsampleHistory(rawStates, hoursToShow, 0);
+      expect(result).toEqual(rawStates);
+    });
+
+    it('should correctly downsample history into buckets', () => {
+      const states = [
+        { timestamp: startTime, value: 5 }, // Start time state
+        { timestamp: new Date('2023-01-01T10:15:00Z'), value: 10 }, // Bucket 1 (10:00-10:30)
+        { timestamp: new Date('2023-01-01T10:45:00Z'), value: 20 }, // Bucket 2 (10:30-11:00)
+        { timestamp: new Date('2023-01-01T11:15:00Z'), value: 30 }, // Bucket 3 (11:00-11:30)
+        { timestamp: new Date('2023-01-01T11:45:00Z'), value: 40 }, // Bucket 4 (11:30-12:00)
+      ];
+
+      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      // Expected buckets (4 total: 2 hours * 2 points/hr)
+      // 0. Anchor point at start time
+      // 1. Bucket 10:00-10:30, timestamp 10:30, value 10
+      // 2. Bucket 10:30-11:00, timestamp 11:00, value 20
+      // 3. Bucket 11:00-11:30, timestamp 11:30, value 30
+      // 4. Bucket 11:30-12:00, timestamp 12:00, value 40
+      expect(result).toHaveLength(5);
+      expect(result[0]).toEqual({ timestamp: startTime, value: 5 });
+      expect(result[1]).toEqual({ timestamp: new Date('2023-01-01T10:30:00Z'), value: 10 });
+      expect(result[2]).toEqual({ timestamp: new Date('2023-01-01T11:00:00Z'), value: 20 });
+      expect(result[3]).toEqual({ timestamp: new Date('2023-01-01T11:30:00Z'), value: 30 });
+      expect(result[4]).toEqual({ timestamp: new Date('2023-01-01T12:00:00Z'), value: 40 });
+    });
+
+    it('should use median for buckets with multiple values', () => {
+      const states = [
+        { timestamp: startTime, value: 5 },
+        // Bucket 1 (10:00-10:30)
+        { timestamp: new Date('2023-01-01T10:10:00Z'), value: 10 },
+        { timestamp: new Date('2023-01-01T10:15:00Z'), value: 30 },
+        { timestamp: new Date('2023-01-01T10:20:00Z'), value: 20 }, // Median should be 20
+      ];
+
+      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      expect(result[1].value).toBe(20);
+    });
+
+    it('should carry forward the last known value for empty buckets', () => {
+      const states = [
+        { timestamp: startTime, value: 5 },
+        { timestamp: new Date('2023-01-01T10:15:00Z'), value: 10 }, // Bucket 1 (10:00-10:30), last known value is 10
+        // Bucket 2 (10:30-11:00) is empty
+        { timestamp: new Date('2023-01-01T11:15:00Z'), value: 30 }, // Bucket 3 (11:00-11:30)
+      ];
+
+      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      expect(result).toHaveLength(5);
+      // Bucket 1 has value 10
+      expect(result[1].value).toBe(10);
+      // Bucket 2 is empty, should carry forward value 10
+      expect(result[2].value).toBe(10);
+      // Bucket 3 has value 30
+      expect(result[3].value).toBe(30);
+      // Bucket 4 is empty, should carry forward value 30
+      expect(result[4].value).toBe(30);
+    });
+  });
 });
