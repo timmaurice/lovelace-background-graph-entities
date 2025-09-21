@@ -76,6 +76,7 @@ export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
   points_per_hour?: number;
   update_interval?: number;
   color_thresholds?: ColorThreshold[];
-  curve?: 'spline' | 'linear' | 'step' | 'natural';
+  curve?: 'spline' | 'linear' | 'natural' | 'step';
   line_glow?: boolean;
+  tile_style?: boolean;
 }

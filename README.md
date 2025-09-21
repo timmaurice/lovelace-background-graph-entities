@@ -37,6 +37,7 @@ The `background-graph-entities` custom component for Home Assistant displays a l
   - **Clickable Entities:** Tap any entity to open its "More Info" dialog.
   - **Smart Formatting:** Automatically formats time-based sensors (e.g., travel time) into a human-readable format.
   - **Interactive Toggles:** Entities that can be turned on or off (like switches and lights) will display an interactive toggle.
+  - **Tile Style:** A compact mode that replaces the toggle with an interactive, state-aware icon and provides a cleaner layout.
   - **Separate Graph Data:** Optionally display one entity (like a switch) while graphing the history of another (like its power consumption sensor).
 
 ## Installation
@@ -70,6 +71,7 @@ The card is fully configurable through the UI editor.
 | Name               | Type    | Default      | Description                                                                                                                                                                                                                           |
 | ------------------ | ------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `type`             | string  | **Required** | `custom:background-graph-entities`                                                                                                                                                                                                    |
+| `tile_style`       | boolean | `false`      | Enables a more compact, tile-like layout. The entity value is placed below the name, and toggles are replaced by an interactive icon.                                                                                                 |
 | `title`            | string  | `''`         | The title of the card.                                                                                                                                                                                                                |
 | `hours_to_show`    | number  | `24`         | The number of hours of history to display in the graphs.                                                                                                                                                                              |
 | `line_width`       | number  | `3`          | The width of the graph line in pixels.                                                                                                                                                                                                |
@@ -144,6 +146,7 @@ line_width: 2
 line_opacity: 0.2
 curve: linear
 line_glow: true
+tile_style: true
 entities:
   # This entity uses the global settings
   - entity: sensor.living_room_temperature

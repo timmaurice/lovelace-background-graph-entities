@@ -2,6 +2,8 @@
   "editor": {
     "general": "Allgemein",
     "title": "Titel (Optional)",
+    "layout": "Layout",
+    "tile_style": "Kompakterer Kachel-Stil",
     "graph_appearance": "Graph-Darstellung",
     "hours_to_show": "Stunden zum Anzeigen",
     "line_width": "Linienbreite",

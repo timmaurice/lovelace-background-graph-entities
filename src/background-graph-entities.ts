@@ -12,7 +12,7 @@ import {
 import { extent } from 'd3-array';
 import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
-import { line as d3Line, curveBasis, curveLinear, curveStep, curveNatural, CurveFactory } from 'd3-shape';
+import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
 
 // Default configuration values
@@ -310,6 +310,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const unit = stateObj.attributes.unit_of_measurement ?? '';
     const stateNum = parseFloat(stateObj.state);
     let displayValue: string;
+    const hasToggle = stateObj.state === 'on' || stateObj.state === 'off';
+    const isTileStyle = this._config.tile_style === true;
+    const isActive = hasToggle && stateObj.state === 'on';
     const iconStyle = entityConfig.icon_color ? `color: ${entityConfig.icon_color}` : '';
 
     // Special formatting for time in minutes
@@ -331,7 +334,38 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       displayValue = [valueToDisplay, unit].filter(Boolean).join(' ');
     }
 
-    const hasToggle = stateObj.state === 'on' || stateObj.state === 'off';
+    if (isTileStyle) {
+      return html`
+        <div class="entity-row" @click=${() => this._openEntityPopup(entityConfig.entity)}>
+          <div
+            class="icon-container ${hasToggle ? (isActive ? 'active' : 'inactive') : ''}"
+            @click=${(e: Event) => {
+              if (hasToggle) {
+                e.stopPropagation();
+                this._toggleEntity(entityConfig.entity);
+              }
+            }}
+          >
+            ${entityConfig.icon
+              ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
+              : html`<ha-state-icon
+                  class="entity-icon"
+                  .hass=${this.hass}
+                  .stateObj=${stateObj}
+                  .stateColor=${isTileStyle}
+                  style=${iconStyle}
+                ></ha-state-icon>`}
+          </div>
+          <div class="entity-info">
+            <div class="entity-name">
+              ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
+            </div>
+            <div class="entity-value">${displayValue}</div>
+          </div>
+          <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
+        </div>
+      `;
+    }
 
     return html`
       <div class="entity-row" @click=${() => this._openEntityPopup(entityConfig.entity)}>
@@ -341,14 +375,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               class="entity-icon"
               .hass=${this.hass}
               .stateObj=${stateObj}
+              .stateColor=${isTileStyle}
               style=${iconStyle}
             ></ha-state-icon>`}
         <div class="entity-name">${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}</div>
         <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
-        ${hasToggle
+        ${hasToggle && !isTileStyle
           ? html`
               <div class="entity-with-toggle">
                 <ha-switch
+                  aria-label=${`Toggle ${entityConfig.name || entityConfig.entity}`}
                   .checked=${stateObj.state === 'on'}
                   @click=${(e: Event) => {
                     e.stopPropagation();
@@ -644,7 +680,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     return html`
       <ha-card .header=${this._config.title}>
-        <div class="card-content ${this._config.line_length === 'short' ? 'short' : ''}">
+        <div
+          class="card-content ${this._config.tile_style ? 'tile' : ''} ${this._config.line_length === 'short'
+            ? 'short'
+            : ''}"
+        >
           ${this._entities.map((entity) => this._renderEntityRow(entity))}
         </div>
       </ha-card>

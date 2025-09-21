@@ -2,6 +2,8 @@
   "editor": {
     "general": "General",
     "title": "Title (Optional)",
+    "layout": "Layout",
+    "tile_style": "More Compact Tile Style",
     "graph_appearance": "Graph Appearance",
     "hours_to_show": "Hours To Show",
     "line_width": "Line Width",

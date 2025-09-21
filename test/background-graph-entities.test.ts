@@ -218,6 +218,85 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Tile Style Mode', () => {
+    beforeEach(() => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      config = {
+        type: 'custom:background-graph-entities',
+        entities: ['switch.test'],
+        tile_style: true,
+      };
+    });
+
+    it('should apply the tile class to card-content', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+
+      const cardContent = element.shadowRoot?.querySelector('.card-content');
+      expect(cardContent?.classList.contains('tile')).toBe(true);
+    });
+
+    it('should not render a toggle switch', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+
+      const toggle = element.shadowRoot?.querySelector('ha-switch');
+      expect(toggle).toBeNull();
+    });
+
+    it('should render an active icon container for an "on" entity', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+
+      const iconContainer = element.shadowRoot?.querySelector('.icon-container');
+      expect(iconContainer).not.toBeNull();
+      expect(iconContainer?.classList.contains('active')).toBe(true);
+    });
+
+    it('should render name and value inside an entity-info container', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+
+      const entityInfo = element.shadowRoot?.querySelector('.entity-info');
+      expect(entityInfo).not.toBeNull();
+      expect(entityInfo?.querySelector('.entity-name')).not.toBeNull();
+      expect(entityInfo?.querySelector('.entity-value')).not.toBeNull();
+    });
+
+    it('should call toggle service on icon click', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+
+      const iconContainer = element.shadowRoot?.querySelector('.icon-container');
+      (iconContainer as HTMLElement).click();
+
+      expect(hass.callService).toHaveBeenCalledWith('homeassistant', 'toggle', { entity_id: 'switch.test' });
+    });
+
+    it('should open more-info on row click (not on icon)', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+
+      const moreInfoSpy = vi.fn();
+      element.addEventListener('hass-more-info', moreInfoSpy);
+      const row = element.shadowRoot?.querySelector('.entity-row');
+      (row as HTMLElement).click();
+
+      expect(moreInfoSpy).toHaveBeenCalled();
+      expect(moreInfoSpy.mock.calls[0][0].detail.entityId).toBe('switch.test');
+    });
+  });
+
   describe('Advanced Features and Overrides', () => {
     const mockNow = new Date('2023-01-01T11:30:00Z');
 
@@ -274,6 +353,20 @@ describe('BackgroundGraphEntities', () => {
 
       expect(moreInfoSpy).toHaveBeenCalled();
       expect(moreInfoSpy.mock.calls[0][0].detail.entityId).toBe('sensor.test');
+    });
+
+    it('should use graph_entity for history fetching', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', graph_entity: 'sensor.graph' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'history/history_during_period', entity_ids: ['sensor.graph'] }),
+      );
     });
 
     it('should apply line_glow effect when configured', async () => {

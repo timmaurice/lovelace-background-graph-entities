@@ -1,6 +1,10 @@
 .card-content {
   padding: 16px;
 
+  &.tile {
+    padding: 10px;
+  }
+
   &.short .graph-container {
     right: 70px;
   }
@@ -19,12 +23,60 @@
   }
 }
 
+.tile .entity-row {
+  height: 36px;
+
+  .entity-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .entity-value {
+    font-size: var(--ha-font-size-s);
+    font-weight: var(--ha-font-weight-normal);
+    line-height: var(--ha-line-height-condensed);
+    margin-left: initial;
+  }
+
+  .icon-container {
+    height: 36px;
+    width: 36px;
+  }
+}
+
 .entity-icon {
   color: var(--primary-text-color);
   fill: currentColor;
   margin-right: 8px;
   text-align: center;
   width: 40px;
+
+  .tile & {
+    cursor: pointer;
+  }
+}
+
+.icon-container {
+  align-items: center;
+  border-radius: 50%;
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  margin-right: 8px;
+  transition: background-color 0.2s ease-in-out;
+  width: 40px;
+
+  .entity-icon {
+    margin-right: 0;
+  }
+
+  &.active {
+    background-color: var(--state-active-color);
+  }
+
+  &.inactive {
+    background-color: rgba(127, 127, 127, 0.2);
+  }
 }
 
 .entity-name {
@@ -35,6 +87,10 @@
   color: var(--primary-text-color);
   margin-left: auto;
   z-index: 1;
+}
+
+.tile .entity-name {
+  font-weight: bold;
 }
 
 .graph-container {

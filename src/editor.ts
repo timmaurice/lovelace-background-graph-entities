@@ -646,6 +646,15 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           ></ha-textfield>
         </div>
 
+        <h3>${localize(this.hass, 'component.bge.editor.layout')}</h3>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.tile_style')}>
+          <ha-switch
+            .checked=${this._config.tile_style === true}
+            .configValue=${'tile_style'}
+            @change=${this._valueChanged}
+          ></ha-switch>
+        </ha-formfield>
+
         <h3>${localize(this.hass, 'component.bge.editor.graph_appearance')}</h3>
         <div class="side-by-side">
           <ha-textfield
