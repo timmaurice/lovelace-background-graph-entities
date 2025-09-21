@@ -68,14 +68,21 @@
 
   .entity-icon {
     margin-right: 0;
+    color: var(--state-inactive-color);
   }
 
   &.active {
-    background-color: var(--state-active-color);
+    // Use the custom icon color for the background if it's set, otherwise use the default active color.
+    // The --bge-icon-color is set on the .entity-row element.
+    background-color: color-mix(in srgb, var(--bge-icon-color, var(--state-active-color)) 20%, transparent);
+
+    .entity-icon {
+      color: var(--state-active-color);
+    }
   }
 
   &.inactive {
-    background-color: rgba(127, 127, 127, 0.2);
+    background-color: color-mix(in srgb, var(--state-inactive-color) 20%, transparent);
   }
 }
 

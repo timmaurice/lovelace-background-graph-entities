@@ -313,7 +313,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const hasToggle = stateObj.state === 'on' || stateObj.state === 'off';
     const isTileStyle = this._config.tile_style === true;
     const isActive = hasToggle && stateObj.state === 'on';
-    const iconStyle = entityConfig.icon_color ? `color: ${entityConfig.icon_color}` : '';
+    const iconColor = entityConfig.icon_color;
+    const iconStyle = iconColor ? `color: ${iconColor}` : '';
 
     // Special formatting for time in minutes
     if (unit.toLowerCase() === 'min') {
@@ -336,7 +337,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     if (isTileStyle) {
       return html`
-        <div class="entity-row" @click=${() => this._openEntityPopup(entityConfig.entity)}>
+        <div
+          class="entity-row"
+          style=${iconColor ? `--bge-icon-color: ${iconColor}` : ''}
+          @click=${() => this._openEntityPopup(entityConfig.entity)}
+        >
           <div
             class="icon-container ${hasToggle ? (isActive ? 'active' : 'inactive') : ''}"
             @click=${(e: Event) => {
