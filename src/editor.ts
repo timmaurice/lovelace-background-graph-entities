@@ -386,13 +386,16 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     const entityConf = this._config.entities[this._editingIndex];
     if (!entityConf) return html``;
 
+    const stateObj = this.hass.states[entityConf.entity];
+    const title = entityConf.name || stateObj?.attributes.friendly_name || entityConf.entity;
+
     const overwriteAppearance = entityConf.overwrite_graph_appearance ?? false;
     const finalIconColor = entityConf.icon_color || 'var(--primary-text-color)';
 
     return html`
       <div class="header">
         <ha-icon-button @click=${this._goBack}><ha-icon icon="mdi:chevron-left"></ha-icon></ha-icon-button>
-        <span class="title">${entityConf.name || entityConf.entity}</span>
+        <span class="title">${title}</span>
       </div>
       <div class="card-config">
         <ha-textfield
@@ -411,6 +414,15 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           data-field="icon"
           @value-changed=${this._entityAttributeChanged}
         ></ha-icon-picker>
+        <ha-entity-picker
+          .hass=${this.hass}
+          .label=${localize(this.hass, 'component.bge.editor.graph_entity')}
+          .value=${entityConf.graph_entity || ''}
+          .helper=${localize(this.hass, 'component.bge.editor.graph_entity_helper')}
+          data-index=${this._editingIndex}
+          data-field="graph_entity"
+          @value-changed=${this._entityAttributeChanged}
+        ></ha-entity-picker>
 
         <div
           class="color-input-wrapper"
@@ -675,6 +687,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           >
             <mwc-list-item value="spline">${localize(this.hass, 'component.bge.editor.curve_spline')}</mwc-list-item>
             <mwc-list-item value="linear">${localize(this.hass, 'component.bge.editor.curve_linear')}</mwc-list-item>
+            <mwc-list-item value="natural">${localize(this.hass, 'component.bge.editor.curve_natural')}</mwc-list-item>
             <mwc-list-item value="step">${localize(this.hass, 'component.bge.editor.curve_step')}</mwc-list-item>
           </ha-select>
         </div>

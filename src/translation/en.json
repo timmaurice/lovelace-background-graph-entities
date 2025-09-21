@@ -28,9 +28,12 @@
     "name": "Name",
     "icon": "Icon",
     "icon_color": "Icon Color",
+    "graph_entity": "Graph Entity (Optional)",
+    "graph_entity_helper": "Override the entity used for the graph's history data.",
     "curve": "Curve Type",
     "curve_spline": "Spline",
     "curve_linear": "Linear",
-    "curve_step": "Step"
+    "curve_step": "Step",
+    "curve_natural": "Natural"
   }
 }

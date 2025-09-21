@@ -10,6 +10,11 @@ interface HaCard extends HTMLElement {
   header?: string;
 }
 
+// Define a minimal interface for the ha-switch element
+interface HaSwitch extends HTMLElement {
+  checked?: boolean;
+}
+
 describe('BackgroundGraphEntities', () => {
   let element: BackgroundGraphEntitiesType;
   let hass: HomeAssistant;
@@ -47,6 +52,7 @@ describe('BackgroundGraphEntities', () => {
       language: 'en',
       themes: { darkMode: false },
       callWS: vi.fn().mockResolvedValue({ 'sensor.test': [] }),
+      callService: vi.fn().mockResolvedValue(true),
     };
 
     // Mock a basic card configuration
@@ -176,6 +182,39 @@ describe('BackgroundGraphEntities', () => {
       expect(values).toHaveLength(2);
       expect(values?.[0].textContent?.trim()).toBe('14 min');
       expect(values?.[1].textContent?.trim()).toBe('1h 15min');
+    });
+  });
+
+  describe('Interactivity', () => {
+    it('should render a toggle for on/off entities', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const toggle = element.shadowRoot?.querySelector<HaSwitch>('ha-switch');
+      expect(toggle).not.toBeNull();
+      expect(toggle?.checked).toBe(true);
+    });
+
+    it('should call the toggle service when the switch is clicked', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const toggle = element.shadowRoot?.querySelector('ha-switch');
+      (toggle as HTMLElement).click();
+
+      expect(hass.callService).toHaveBeenCalledWith('homeassistant', 'toggle', { entity_id: 'switch.test' });
     });
   });
 

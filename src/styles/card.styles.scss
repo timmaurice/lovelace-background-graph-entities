@@ -65,3 +65,10 @@
 .entity-row:hover .graph-dot {
   opacity: 1;
 }
+
+.entity-with-toggle {
+  align-items: center;
+  display: flex;
+  margin-left: auto;
+  z-index: 1;
+}

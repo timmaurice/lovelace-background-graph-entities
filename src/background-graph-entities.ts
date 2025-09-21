@@ -12,7 +12,7 @@ import {
 import { extent } from 'd3-array';
 import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
-import { line as d3Line, curveBasis, curveLinear, curveStep, CurveFactory } from 'd3-shape';
+import { line as d3Line, curveBasis, curveLinear, curveStep, curveNatural, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
 
 // Default configuration values
@@ -159,6 +159,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       linear: curveLinear,
       step: curveStep,
       spline: curveBasis,
+      natural: curveNatural,
     };
     const curveType = this._config?.curve || DEFAULT_CURVE;
     // Fallback to spline (curveBasis) if an invalid curve type is provided from the config.
@@ -175,8 +176,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     containers.forEach((container) => {
       const entityId = container.dataset.entityId;
       if (entityId) {
-        const entityConfig = this._entities.find((e) => e.entity === entityId);
-        const history = this._history.get(entityId);
+        const entityConfig = this._entities.find((e) => e.entity === entityId)!;
+        const graphEntityId = entityConfig.graph_entity || entityId;
+        const history = this._history.get(graphEntityId);
         this._renderD3Graph(container, history, entityConfig);
       }
     });
@@ -295,6 +297,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     this.dispatchEvent(event);
   }
 
+  private _toggleEntity(entityId: string): void {
+    this.hass.callService('homeassistant', 'toggle', {
+      entity_id: entityId,
+    });
+  }
+
   private _renderEntityRow(entityConfig: EntityConfig): TemplateResult {
     const stateObj = this.hass.states[entityConfig.entity];
     if (!stateObj) return this._renderUnavailableEntityRow(entityConfig);
@@ -302,6 +310,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const unit = stateObj.attributes.unit_of_measurement ?? '';
     const stateNum = parseFloat(stateObj.state);
     let displayValue: string;
+    const iconStyle = entityConfig.icon_color ? `color: ${entityConfig.icon_color}` : '';
 
     // Special formatting for time in minutes
     if (unit.toLowerCase() === 'min') {
@@ -322,7 +331,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       displayValue = [valueToDisplay, unit].filter(Boolean).join(' ');
     }
 
-    const iconStyle = entityConfig.icon_color ? `color: ${entityConfig.icon_color}` : '';
+    const hasToggle = stateObj.state === 'on' || stateObj.state === 'off';
 
     return html`
       <div class="entity-row" @click=${() => this._openEntityPopup(entityConfig.entity)}>
@@ -336,7 +345,19 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             ></ha-state-icon>`}
         <div class="entity-name">${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}</div>
         <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
-        <div class="entity-value">${displayValue}</div>
+        ${hasToggle
+          ? html`
+              <div class="entity-with-toggle">
+                <ha-switch
+                  .checked=${stateObj.state === 'on'}
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    this._toggleEntity(entityConfig.entity);
+                  }}
+                ></ha-switch>
+              </div>
+            `
+          : html`<div class="entity-value">${displayValue}</div>`}
       </div>
     `;
   }
@@ -488,8 +509,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
     const newHistory = new Map<string, { timestamp: Date; value: number }[] | null>();
     const historyPromises = this._entities.map(async (entityConf) => {
-      const entityId = entityConf.entity;
-      const history = await this._fetchHistory(entityId);
+      const entityId = entityConf.graph_entity || entityConf.entity;
+      const history = await this._fetchHistory(entityId, entityConf.entity);
       newHistory.set(entityId, history);
     });
     await Promise.all(historyPromises);
@@ -570,7 +591,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return downsampled;
   }
 
-  private async _fetchHistory(entityId: string): Promise<{ timestamp: Date; value: number }[] | null> {
+  private async _fetchHistory(
+    entityId: string,
+    mainEntityIdForLogging?: string,
+  ): Promise<{ timestamp: Date; value: number }[] | null> {
     if (!this.hass?.callWS) return null;
 
     const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
@@ -608,7 +632,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         .filter((s) => !isNaN(s.value));
       return this._downsampleHistory(finalStates, hoursToShow, pointsPerHour);
     } catch (err) {
-      console.error(`Error fetching history for ${entityId}:`, err);
+      console.error(`Error fetching history for ${mainEntityIdForLogging || entityId} (using ${entityId}):`, err);
       return null;
     }
   }
@@ -630,6 +654,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   static styles = css`
     ${unsafeCSS(styles)}
   `;
+}
+
+if (typeof window !== 'undefined' && !customElements.get('ha-switch')) {
+  // Define a placeholder if ha-switch is not available, to prevent rendering errors.
+  // This is a fallback for environments where core components might not be loaded.
+  customElements.define('ha-switch', class extends HTMLElement {});
 }
 
 if (typeof window !== 'undefined') {

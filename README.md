@@ -24,7 +24,7 @@ The `background-graph-entities` custom component for Home Assistant displays a l
   - **Global & Per-Entity Styling:** Configure graph appearance globally or override settings for each entity individually.
   - **Dynamic Line Colors:** Use a single color or define value-based thresholds to create stunning color gradients.
   - **Adjustable Graph Appearance:** Control line width, opacity, and an optional glow effect to match your dashboard's theme.
-  - **Multiple Curve Styles:** Choose between `spline` (default), `linear`, or `step` curves to customize the graph's appearance.
+  - **Multiple Curve Styles:** Choose between `spline` (default), `linear`, `natural`, or `step` curves to customize the graph's appearance.
 - **Powerful UI Editor:** A user-friendly editor makes configuration a breeze.
   - **Drag & Drop:** Easily reorder entities and color thresholds.
   - **Live Previews:** See your changes instantly.
@@ -36,6 +36,8 @@ The `background-graph-entities` custom component for Home Assistant displays a l
 - **User-Friendly:**
   - **Clickable Entities:** Tap any entity to open its "More Info" dialog.
   - **Smart Formatting:** Automatically formats time-based sensors (e.g., travel time) into a human-readable format.
+  - **Interactive Toggles:** Entities that can be turned on or off (like switches and lights) will display an interactive toggle.
+  - **Separate Graph Data:** Optionally display one entity (like a switch) while graphing the history of another (like its power consumption sensor).
 
 ## Installation
 
@@ -75,7 +77,7 @@ The card is fully configurable through the UI editor.
 | `line_color`       | string  | Theme-aware  | The color of the graph line. Can be any valid CSS color. Defaults to `white` in dark mode and `black` in light mode. Ignored if `color_thresholds` is used.                                                                           |
 | `line_length`      | string  | `long`       | The length of the graph. Can be `long` or `short`. `short` provides more space for the entity value.                                                                                                                                  |
 | `line_glow`        | boolean | `false`      | Adds a subtle glow effect to the graph line.                                                                                                                                                                                          |
-| `curve`            | string  | `spline`     | The interpolation type for the graph line. Can be `spline`, `linear`, or `step`.                                                                                                                                                      |
+| `curve`            | string  | `spline`     | The interpolation type for the graph line. Can be `spline`, `linear`, `natural`, or `step`.                                                                                                                                           |
 | `color_thresholds` | list    | `[]`         | A list of color thresholds to create a gradient line. See Advanced Example.                                                                                                                                                           |
 | `points_per_hour`  | number  | `1`          | The number of time buckets per hour. The card calculates the median value for each bucket and fills in any gaps with the last known value to create a continuous graph. Higher values provide more detail but may impact performance. |
 | `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes).                                                                                                                                                                 |
@@ -90,6 +92,7 @@ Each entry in the `entities` list can be a string (the entity ID) or an object w
 | `name`                       | string  | Entity's friendly name    | A custom name for the entity.                                                                             |
 | `icon`                       | string  | Entity's icon             | A custom icon for the entity (e.g., `mdi:thermometer`).                                                   |
 | `icon_color`                 | string  | Theme-aware               | A custom color for the icon (e.g., `orange` or `#ffaa00`). Defaults to the theme's icon color.            |
+| `graph_entity`               | string  | `entity` ID               | An optional entity ID to use for the graph's history data, instead of the main entity.                    |
 | `overwrite_graph_appearance` | boolean | `false`                   | Set to `true` to enable entity-specific graph settings below. Required for per-entity overrides to apply. |
 | `line_color`                 | string  | Global `line_color`       | Overrides the global `line_color` for this entity only.                                                   |
 | `line_opacity`               | number  | Global `line_opacity`     | Overrides the global `line_opacity` for this entity only.                                                 |
@@ -164,6 +167,11 @@ entities:
         color: '#f1c40f' # yellow
       - value: 2000
         color: '#e74c3c' # red
+
+  # This entity shows a switch but graphs its power sensor
+  - entity: switch.office_light
+    name: Office Light
+    graph_entity: sensor.office_light_power
 ```
 
 ## Development

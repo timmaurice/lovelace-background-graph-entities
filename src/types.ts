@@ -5,6 +5,7 @@ export interface HomeAssistant {
   localize: (key: string, ...args: unknown[]) => string;
   language: string;
   callWS: <T>(message: { type: string; [key: string]: unknown }) => Promise<T>;
+  callService: (domain: string, service: string, serviceData?: object) => Promise<unknown>;
   themes?: {
     darkMode?: boolean;
     [key: string]: unknown;
@@ -57,6 +58,7 @@ export interface EntityConfig {
   name?: string;
   icon?: string;
   icon_color?: string;
+  graph_entity?: string;
   overwrite_graph_appearance?: boolean;
   line_color?: string;
   line_opacity?: number;
@@ -74,6 +76,6 @@ export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
   points_per_hour?: number;
   update_interval?: number;
   color_thresholds?: ColorThreshold[];
-  curve?: 'spline' | 'linear' | 'step';
+  curve?: 'spline' | 'linear' | 'step' | 'natural';
   line_glow?: boolean;
 }
