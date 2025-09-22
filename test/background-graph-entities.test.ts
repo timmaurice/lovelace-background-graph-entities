@@ -483,16 +483,22 @@ describe('BackgroundGraphEntities', () => {
       vi.useRealTimers();
     });
 
-    it('should return raw states if pointsPerHour is 0', () => {
+    it('should return raw states if pointsPerHour is 0 or less', () => {
       const rawStates = [
         { timestamp: new Date('2023-01-01T11:00:00Z'), value: 10 },
         { timestamp: new Date('2023-01-01T11:30:00Z'), value: 20 },
       ];
       const result = instance._downsampleHistory(rawStates, hoursToShow, 0);
       expect(result).toEqual(rawStates);
+      const resultNegative = instance._downsampleHistory(rawStates, hoursToShow, -1);
+      expect(resultNegative).toEqual(rawStates);
     });
 
-    it('should correctly downsample history into buckets', () => {
+    it('should correctly calculate time-weighted average for buckets', () => {
+      // Bucket 1 (10:00-10:30): value 10 for 30 mins. Avg: 10.
+      // Bucket 2 (10:30-11:00): value 20 for 30 mins. Avg: 20.
+      // Bucket 3 (11:00-11:30): value 30 for 30 mins. Avg: 30.
+      // Bucket 4 (11:30-12:00): value 40 for 30 mins. Avg: 40.
       const states = [
         { timestamp: startTime, value: 5 }, // Start time state
         { timestamp: new Date('2023-01-01T10:15:00Z'), value: 10 }, // Bucket 1 (10:00-10:30)
@@ -503,38 +509,36 @@ describe('BackgroundGraphEntities', () => {
 
       const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
 
-      // Expected buckets (4 total: 2 hours * 2 points/hr)
-      // 0. Anchor point at start time
-      // 1. Bucket 10:00-10:30, timestamp 10:30, value 10
-      // 2. Bucket 10:30-11:00, timestamp 11:00, value 20
-      // 3. Bucket 11:00-11:30, timestamp 11:30, value 30
-      // 4. Bucket 11:30-12:00, timestamp 12:00, value 40
       expect(result).toHaveLength(5);
       expect(result[0]).toEqual({ timestamp: startTime, value: 5 });
-      expect(result[1]).toEqual({ timestamp: new Date('2023-01-01T10:30:00Z'), value: 10 });
-      expect(result[2]).toEqual({ timestamp: new Date('2023-01-01T11:00:00Z'), value: 20 });
-      expect(result[3]).toEqual({ timestamp: new Date('2023-01-01T11:30:00Z'), value: 30 });
-      expect(result[4]).toEqual({ timestamp: new Date('2023-01-01T12:00:00Z'), value: 40 });
+      expect(result[1].value).toBeCloseTo(7.5); // (5*15 + 10*15)/30
+      expect(result[2].value).toBeCloseTo(15); // (10*15 + 20*15)/30
+      expect(result[3].value).toBeCloseTo(25); // (20*15 + 30*15)/30
+      expect(result[4].value).toBeCloseTo(35); // (30*15 + 40*15)/30
     });
 
-    it('should use median for buckets with multiple values', () => {
+    it('should correctly weight a short spike in a bucket', () => {
+      // Bucket 1 (10:00-10:30): value 10 for 29 mins, 1000 for 1 min.
       const states = [
         { timestamp: startTime, value: 5 },
-        // Bucket 1 (10:00-10:30)
-        { timestamp: new Date('2023-01-01T10:10:00Z'), value: 10 },
-        { timestamp: new Date('2023-01-01T10:15:00Z'), value: 30 },
-        { timestamp: new Date('2023-01-01T10:20:00Z'), value: 20 }, // Median should be 20
+        { timestamp: new Date('2023-01-01T10:00:00Z'), value: 10 },
+        { timestamp: new Date('2023-01-01T10:29:00Z'), value: 1000 }, // Spike for 1 minute
       ];
 
       const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
 
-      expect(result[1].value).toBe(20);
+      // Weighted average: ((10 * 29) + (1000 * 1)) / 30 = 1290 / 30 = 43
+      expect(result[1].value).toBeCloseTo(43);
+      // The rest of the buckets should hold the last value
+      expect(result[2].value).toBe(1000);
+      expect(result[3].value).toBe(1000);
+      expect(result[4].value).toBe(1000);
     });
 
     it('should carry forward the last known value for empty buckets', () => {
       const states = [
         { timestamp: startTime, value: 5 },
-        { timestamp: new Date('2023-01-01T10:15:00Z'), value: 10 }, // Bucket 1 (10:00-10:30), last known value is 10
+        { timestamp: new Date('2023-01-01T10:15:00Z'), value: 10 }, // Bucket 1 (10:00-10:30)
         // Bucket 2 (10:30-11:00) is empty
         { timestamp: new Date('2023-01-01T11:15:00Z'), value: 30 }, // Bucket 3 (11:00-11:30)
       ];
@@ -542,14 +546,41 @@ describe('BackgroundGraphEntities', () => {
       const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
 
       expect(result).toHaveLength(5);
-      // Bucket 1 has value 10
-      expect(result[1].value).toBe(10);
+      // Bucket 1 has weighted average of 5 and 10
+      expect(result[1].value).toBeCloseTo(7.5);
       // Bucket 2 is empty, should carry forward value 10
       expect(result[2].value).toBe(10);
-      // Bucket 3 has value 30
-      expect(result[3].value).toBe(30);
+      // Bucket 3 has weighted average of 10 and 30
+      expect(result[3].value).toBeCloseTo(20);
       // Bucket 4 is empty, should carry forward value 30
       expect(result[4].value).toBe(30);
+    });
+
+    it('should correctly handle a short, high-value spike (e.g., illuminance)', () => {
+      // Simulates a sensor that is 0 for a long time, spikes to 50000 for 10 seconds, then returns to 0.
+      const states = [
+        { timestamp: startTime, value: 0 }, // 10:00:00
+        { timestamp: new Date('2023-01-01T10:15:00Z'), value: 0 },
+        { timestamp: new Date('2023-01-01T10:15:10Z'), value: 50000 }, // 10-second spike
+        { timestamp: new Date('2023-01-01T10:15:20Z'), value: 0 },
+      ];
+
+      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      // Bucket 1 (10:00-10:30): Contains the spike.
+      // The bucket is 30 minutes (1800 seconds) long.
+      // Value is 0 for (1800 - 10) seconds and 50000 for 10 seconds.
+      // Weighted average: (50000 * 10) / 1800 = 500000 / 1800 ≈ 277.77
+      expect(result[1].value).toBeCloseTo(277.78);
+
+      // Subsequent buckets should be 0, as the value returned to 0.
+      expect(result[2].value).toBe(0);
+    });
+
+    it('should return an empty array when no history is provided', () => {
+      const states: { timestamp: Date; value: number }[] = [];
+      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+      expect(result).toEqual([]);
     });
   });
 });

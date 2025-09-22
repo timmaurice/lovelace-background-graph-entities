@@ -573,47 +573,50 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       return states; // Return raw states if downsampling is disabled or no data
     }
 
+    // Create a combined list of states to calculate durations between them.
+    // The last "state" is a virtual point at the current time to cap the duration of the last real state.
+    const statesWithEndpoints = [...states, { timestamp: new Date(), value: states[states.length - 1]?.value ?? 0 }];
+
     const now = new Date();
     const startTime = new Date(now.getTime() - hours * MS_IN_H);
     const interval = MS_IN_H / pointsPerHour;
     const numBuckets = Math.ceil((now.getTime() - startTime.getTime()) / interval);
-
-    const buckets: { values: number[] }[] = Array.from({ length: numBuckets }, () => ({
-      values: [],
-    }));
-
-    // The first state is an anchor point at the start of the graph.
-    // It should not be part of the bucketing, so we skip it.
-    const dataStates = states.slice(1);
-    for (const state of dataStates) {
-      const stateTime = state.timestamp.getTime();
-      if (stateTime < startTime.getTime()) continue;
-
-      const bucketIndex = Math.floor((stateTime - startTime.getTime() - 1) / interval);
-      if (bucketIndex >= 0 && bucketIndex < numBuckets) {
-        buckets[bucketIndex].values.push(state.value);
-      }
-    }
 
     const downsampled: { timestamp: Date; value: number }[] = [];
     // The first state is guaranteed by `include_start_time_state: true` to be the value at the start of the window.
     let lastValue = states.length > 0 ? states[0].value : 0;
 
     for (let i = 0; i < numBuckets; i++) {
-      const bucket = buckets[i]; // The current bucket of values
       const bucketTimestamp = new Date(startTime.getTime() + (i + 1) * interval);
       let valueForBucket: number;
 
-      if (bucket.values.length > 0) {
-        // Calculate the median for the bucket's value to reflect its overall state.
-        const sortedValues = bucket.values.sort((a, b) => a - b);
-        const mid = Math.floor(sortedValues.length / 2);
-        valueForBucket =
-          sortedValues.length % 2 !== 0 ? sortedValues[mid] : (sortedValues[mid - 1] + sortedValues[mid]) / 2;
-        // Update lastValue with the actual last measurement in the bucket for carry-forward.
-        lastValue = bucket.values[bucket.values.length - 1];
+      const bucketStartTime = startTime.getTime() + i * interval;
+      const bucketEndTime = bucketStartTime + interval;
+      let weightedSum = 0;
+      let totalDurationInBucket = 0;
+
+      // Iterate through all state changes to calculate their weighted contribution to this bucket.
+      for (let k = 0; k < statesWithEndpoints.length - 1; k++) {
+        const currentState = statesWithEndpoints[k];
+        const nextState = statesWithEndpoints[k + 1];
+
+        // Determine the portion of the state's duration that falls within the current bucket.
+        const start = Math.max(currentState.timestamp.getTime(), bucketStartTime);
+        const end = Math.min(nextState.timestamp.getTime(), bucketEndTime);
+
+        if (start < end) {
+          const duration = end - start;
+          weightedSum += currentState.value * duration;
+          totalDurationInBucket += duration;
+        }
+      }
+
+      if (totalDurationInBucket > 0) {
+        valueForBucket = weightedSum / totalDurationInBucket;
+        // Find the last actual value at or before the end of this bucket to carry forward.
+        lastValue = states.filter((s) => s.timestamp.getTime() <= bucketEndTime).pop()?.value ?? lastValue;
       } else {
-        // If the bucket is empty, use the last known value for this bucket's value.
+        // If the bucket is empty, use the last known value.
         valueForBucket = lastValue;
       }
 
