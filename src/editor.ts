@@ -182,6 +182,26 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     });
   }
 
+  private _entitySwitchChanged(ev: Event): void {
+    const target = ev.target as HTMLInputElement;
+    const index = Number((target as HTMLElement).dataset.index);
+    const field = target.dataset.field as keyof EntityConfig;
+
+    if (isNaN(index) || !field) return;
+
+    const isChecked = target.checked;
+
+    this._updateEntityOrGlobalConfig(index, (entityConf) => {
+      const newEntityConf = { ...entityConf };
+      if (isChecked) {
+        (newEntityConf as Partial<EntityConfig>)[field] = true as never;
+      } else {
+        delete (newEntityConf as Partial<EntityConfig>)[field];
+      }
+      return newEntityConf;
+    });
+  }
+
   private _entityAttributeChanged(ev: Event): void {
     const target = ev.target as HTMLElement & { value?: string; type?: string };
     const index = Number(target.dataset.index);
@@ -424,6 +444,18 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           @value-changed=${this._entityAttributeChanged}
         ></ha-entity-picker>
 
+        ${entityConf.graph_entity
+          ? html`
+              <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}>
+                <ha-switch
+                  .checked=${entityConf.show_graph_entity_state === true}
+                  data-index=${this._editingIndex}
+                  data-field="show_graph_entity_state"
+                  @change=${this._entitySwitchChanged}
+                ></ha-switch>
+              </ha-formfield>
+            `
+          : ''}
         <div
           class="color-input-wrapper"
           data-picker-id="entity_icon_color_${this._editingIndex}"

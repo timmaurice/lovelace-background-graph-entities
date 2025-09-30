@@ -27,13 +27,18 @@
   height: 34px;
 
   .entity-info {
+    align-items: flex-start;
     display: flex;
     flex-direction: column;
+    justify-content: center;
   }
 
   .entity-value {
+    align-items: center;
+    display: flex;
     font-size: var(--ha-font-size-s);
     font-weight: var(--ha-font-weight-normal);
+    gap: 4px;
     line-height: var(--ha-line-height-condensed);
     margin-left: initial;
   }
@@ -67,8 +72,8 @@
   width: 40px;
 
   .entity-icon {
-    margin-right: 0;
     color: var(--state-inactive-color);
+    margin-right: 0;
   }
 
   &.active {
@@ -87,6 +92,9 @@
 }
 
 .entity-name {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
   z-index: 1;
 }
 
@@ -94,6 +102,25 @@
   color: var(--primary-text-color);
   margin-left: auto;
   z-index: 1;
+}
+
+.primary-value {
+  text-transform: capitalize;
+}
+
+%secondary-value-style {
+  color: var(--secondary-text-color);
+  font-size: var(--ha-font-size-s);
+  font-weight: var(--ha-font-weight-normal);
+}
+
+.secondary-value {
+  margin-left: 2px;
+  @extend %secondary-value-style;
+}
+
+.secondary-value-inline {
+  @extend %secondary-value-style;
 }
 
 .tile .entity-name {
@@ -134,4 +161,9 @@
   display: flex;
   margin-left: auto;
   z-index: 1;
+
+  // Align the toggle with the primary value for non-toggleable entities
+  .entity-value {
+    text-transform: initial;
+  }
 }

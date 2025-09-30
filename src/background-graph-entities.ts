@@ -314,6 +314,27 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const isTileStyle = this._config.tile_style === true;
     const isActive = hasToggle && stateObj.state === 'on';
     const iconColor = entityConfig.icon_color;
+    const showGraphState = entityConfig.show_graph_entity_state ?? false;
+
+    let secondaryDisplayValue: string | undefined;
+    if (entityConfig.graph_entity && showGraphState) {
+      const graphStateObj = this.hass.states[entityConfig.graph_entity];
+      if (graphStateObj) {
+        const graphEntityDisplay = this.hass.entities[entityConfig.graph_entity];
+        const graphUnit = graphStateObj.attributes.unit_of_measurement ?? '';
+        const graphStateNum = parseFloat(graphStateObj.state);
+
+        const graphDisplayPrecision = graphEntityDisplay?.display_precision;
+        let graphValueToDisplay = graphStateObj.state;
+        if (!isNaN(graphStateNum) && typeof graphDisplayPrecision === 'number') {
+          graphValueToDisplay = graphStateNum.toFixed(graphDisplayPrecision);
+        }
+        secondaryDisplayValue = [graphValueToDisplay, graphUnit].filter(Boolean).join(' ');
+      } else {
+        secondaryDisplayValue = this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
+      }
+    }
+
     const iconStyle = iconColor ? `color: ${iconColor}` : '';
 
     // Special formatting for time in minutes
@@ -365,7 +386,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             <div class="entity-name">
               ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
             </div>
-            <div class="entity-value">${displayValue}</div>
+            <div class="entity-value">
+              <span class="primary-value">${displayValue}</span>
+              ${secondaryDisplayValue ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>` : ''}
+            </div>
           </div>
           <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
         </div>
@@ -383,11 +407,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               .stateColor=${isTileStyle}
               style=${iconStyle}
             ></ha-state-icon>`}
-        <div class="entity-name">${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}</div>
+        <div class="entity-name">
+          ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
+          ${hasToggle && !isTileStyle && secondaryDisplayValue
+            ? html`<span class="secondary-value-inline">${secondaryDisplayValue}</span>`
+            : ''}
+        </div>
         <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
         ${hasToggle && !isTileStyle
           ? html`
-              <div class="entity-with-toggle">
+              <div class="entity-value entity-with-toggle">
                 <ha-switch
                   aria-label=${`Toggle ${entityConfig.name || entityConfig.entity}`}
                   .checked=${stateObj.state === 'on'}
@@ -398,7 +427,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
                 ></ha-switch>
               </div>
             `
-          : html`<div class="entity-value">${displayValue}</div>`}
+          : html`<div class="entity-value" style="text-transform: capitalize;">
+              <span class="primary-value">${displayValue}</span>
+              ${!hasToggle && secondaryDisplayValue
+                ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
+                : ''}
+            </div>`}
       </div>
     `;
   }

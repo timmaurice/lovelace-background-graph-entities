@@ -456,6 +456,115 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Secondary State Display Feature', () => {
+    beforeEach(() => {
+      // Set up hass with a main entity and a graph entity
+      hass.states['switch.main'] = {
+        entity_id: 'switch.main',
+        state: 'on',
+        attributes: { friendly_name: 'Main Switch' },
+      };
+      hass.states['sensor.power'] = {
+        entity_id: 'sensor.power',
+        state: '123.456',
+        attributes: { friendly_name: 'Power Sensor', unit_of_measurement: 'W' },
+      };
+      hass.entities['sensor.power'] = {
+        entity_id: 'sensor.power',
+        display_precision: 1,
+      };
+    });
+
+    it('should display secondary state when enabled', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'switch.main',
+            graph_entity: 'sensor.power',
+            show_graph_entity_state: true,
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const secondaryValue = element.shadowRoot?.querySelector('.secondary-value-inline');
+      expect(secondaryValue).not.toBeNull();
+      // Note the middle dot and space: "· 123.5 W"
+      expect(secondaryValue?.textContent?.trim()).toBe('123.5 W');
+    });
+
+    it('should display secondary state in tile_style mode', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: [
+          {
+            entity: 'switch.main',
+            graph_entity: 'sensor.power',
+            show_graph_entity_state: true,
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const secondaryValue = element.shadowRoot?.querySelector('.secondary-value');
+      expect(secondaryValue).not.toBeNull();
+      expect(secondaryValue?.textContent?.trim()).toBe('· 123.5 W');
+    });
+
+    it('should not display secondary state when disabled', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'switch.main',
+            graph_entity: 'sensor.power',
+            // show_graph_entity_state is false by default
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const secondaryValue = element.shadowRoot?.querySelector('.secondary-value');
+      expect(secondaryValue).toBeNull();
+    });
+
+    it('should display "unavailable" for missing graph_entity', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'switch.main',
+            graph_entity: 'sensor.does_not_exist',
+            show_graph_entity_state: true,
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const secondaryValue = element.shadowRoot?.querySelector('.secondary-value-inline');
+      expect(secondaryValue).not.toBeNull();
+      expect(secondaryValue?.textContent?.trim()).toBe('state.default.unavailable'); // No dot for inline secondary state
+    });
+
+    it('should not display secondary state if graph_entity is not defined', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'switch.main', show_graph_entity_state: true }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const secondaryValue = element.shadowRoot?.querySelector('.secondary-value');
+      expect(secondaryValue).toBeNull();
+    });
+  });
+
   describe('Downsampling Logic (_downsampleHistory)', () => {
     // Define a type that exposes the protected method for testing purposes.
     type TestableBackgroundGraphEntities = BackgroundGraphEntitiesType & {

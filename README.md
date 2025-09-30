@@ -39,6 +39,17 @@ The `background-graph-entities` custom component for Home Assistant displays a l
   - **Interactive Toggles:** Entities that can be turned on or off (like switches and lights) will display an interactive toggle.
   - **Tile Style:** A compact mode that replaces the toggle with an interactive, state-aware icon and provides a cleaner layout.
   - **Separate Graph Data:** Optionally display one entity (like a switch) while graphing the history of another (like its power consumption sensor).
+- **Secondary State Display:** When using a separate `graph_entity`, you can optionally display its current state next to the main entity's state.
+
+## Localization
+
+The editor is available in the following languages:
+
+- English
+- German
+- French
+
+We welcome contributions for other languages. You can contribute by translating the en.json file.
 
 ## Installation
 
@@ -95,6 +106,7 @@ Each entry in the `entities` list can be a string (the entity ID) or an object w
 | `icon`                       | string  | Entity's icon             | A custom icon for the entity (e.g., `mdi:thermometer`).                                                   |
 | `icon_color`                 | string  | Theme-aware               | A custom color for the icon (e.g., `orange` or `#ffaa00`). Defaults to the theme's icon color.            |
 | `graph_entity`               | string  | `entity` ID               | An optional entity ID to use for the graph's history data, instead of the main entity.                    |
+| `show_graph_entity_state`    | boolean | `false`                   | If `graph_entity` is set, set this to `true` to display its state next to the main entity's state.        |
 | `overwrite_graph_appearance` | boolean | `false`                   | Set to `true` to enable entity-specific graph settings below. Required for per-entity overrides to apply. |
 | `line_color`                 | string  | Global `line_color`       | Overrides the global `line_color` for this entity only.                                                   |
 | `line_opacity`               | number  | Global `line_opacity`     | Overrides the global `line_opacity` for this entity only.                                                 |
@@ -175,6 +187,7 @@ entities:
   - entity: switch.office_light
     name: Office Light
     graph_entity: sensor.office_light_power
+    show_graph_entity_state: true
 ```
 
 ## Development
