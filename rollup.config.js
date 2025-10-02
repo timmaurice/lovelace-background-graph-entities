@@ -4,12 +4,34 @@ import typescript from '@rollup/plugin-typescript';
 import terser from '@rollup/plugin-terser';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import json from '@rollup/plugin-json';
-import replace from '@rollup/plugin-replace';
 import { compile } from 'sass';
 import litCss from 'rollup-plugin-lit-css';
 import pkg from './package.json' with { type: 'json' };
 
 const dev = process.env.ROLLUP_WATCH === 'true';
+
+function logCardInfo() {
+  const part1 = `${pkg.name.toUpperCase().replace(/-/g, ' ')}`;
+  const part2 = `v${pkg.version}`;
+  const part1Style =
+    'color: orange; font-weight: bold; background: black; padding: 2px 4px; border-radius: 2px 0 0 2px;';
+  const part2Style =
+    'color: white; font-weight: bold; background: dimgray; padding: 2px 4px; border-radius: 0 2px 2px 0;';
+  const repo = `Github:  ${pkg.repository.url}`;
+  const sponsor = 'Sponsor: https://buymeacoffee.com/timmaurice';
+
+  return `
+    console.groupCollapsed(
+      '%c${part1}%c${part2}',
+      '${part1Style}',
+      '${part2Style}'
+    );
+    console.info("${pkg.description}");
+    console.info('${repo}');
+    console.info('${sponsor}');
+    console.groupEnd();
+  `;
+}
 
 export default {
   input: 'src/background-graph-entities.ts',
@@ -17,6 +39,7 @@ export default {
     file: pkg.main,
     format: 'es',
     sourcemap: dev,
+    banner: logCardInfo(),
     inlineDynamicImports: true,
   },
   onwarn(warning, warn) {
@@ -26,12 +49,6 @@ export default {
     warn(warning);
   },
   plugins: [
-    replace({
-      preventAssignment: true,
-      values: {
-        v__CARD_VERSION__: pkg.version,
-      },
-    }),
     nodeResolve(),
     litCss({
       include: ['**/*.scss'],

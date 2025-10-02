@@ -49,7 +49,17 @@ The editor is available in the following languages:
 - German
 - French
 
-We welcome contributions for other languages. You can contribute by translating the en.json file.
+<details>
+<summary>Contributing Translations</summary>
+
+If you would like to contribute a new translation:
+
+1.  Fork the repository on GitHub.
+2.  Copy the `src/translation/en.json` file and rename it to your language code (e.g., `es.json` for Spanish).
+3.  Translate all the values in the new file.
+4.  Submit a pull request with your changes.
+
+</details>
 
 ## Installation
 
@@ -192,7 +202,8 @@ entities:
 
 ## Development
 
-To contribute to the development, you'll need to set up a build environment.
+<details>
+<summary>To contribute to the development, you'll need to set up a build environment.</summary>
 
 1.  **Clone the repository:**
 
@@ -215,6 +226,7 @@ To contribute to the development, you'll need to set up a build environment.
     ```
 
 4.  In your Home Assistant instance, you will need to configure Lovelace to use the local development version of the card from `dist/background-graph-entities.js`.
+</details>
 
 ---
 

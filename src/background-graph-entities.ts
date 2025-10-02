@@ -37,12 +37,6 @@ const S_IN_MIN = 60;
 const MIN_IN_H = 60;
 const MS_IN_H = MIN_IN_H * S_IN_MIN * MS_IN_S;
 
-console.info(
-  `%c BACKGROUND-GRAPH-ENTITIES %c v__CARD_VERSION__ `,
-  'color: orange; font-weight: bold; background: black',
-  'color: white; font-weight: bold; background: dimgray',
-);
-
 declare global {
   interface Window {
     customCards?: {
@@ -336,6 +330,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
 
     const iconStyle = iconColor ? `color: ${iconColor}` : '';
+    const handleKeyboardToggle = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        this._toggleEntity(entityConfig.entity);
+      }
+    };
 
     // Special formatting for time in minutes
     if (unit.toLowerCase() === 'min') {
@@ -365,12 +366,17 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         >
           <div
             class="icon-container ${hasToggle ? (isActive ? 'active' : 'inactive') : ''}"
+            role=${hasToggle ? 'button' : 'img'}
+            aria-label=${hasToggle ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
+            aria-pressed=${hasToggle ? isActive : 'false'}
+            tabindex=${hasToggle ? '0' : '-1'}
             @click=${(e: Event) => {
               if (hasToggle) {
                 e.stopPropagation();
                 this._toggleEntity(entityConfig.entity);
               }
             }}
+            @keydown=${hasToggle ? handleKeyboardToggle : null}
           >
             ${entityConfig.icon
               ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
