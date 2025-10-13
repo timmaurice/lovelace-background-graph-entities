@@ -1,4 +1,4 @@
-function t(t,e,n,i){var r,o=arguments.length,s=o<3?e:null===i?i=Object.getOwnPropertyDescriptor(e,n):i;if("object"==typeof Reflect&&"function"==typeof Reflect.decorate)s=Reflect.decorate(t,e,n,i);else for(var a=t.length-1;a>=0;a--)(r=t[a])&&(s=(o<3?r(s):o>3?r(e,n,s):r(e,n))||s);return o>3&&s&&Object.defineProperty(e,n,s),s}console.groupCollapsed("%cBACKGROUND GRAPH ENTITIES%cv1.1.1","color: orange; font-weight: bold; background: black; padding: 2px 4px; border-radius: 2px 0 0 2px;","color: white; font-weight: bold; background: dimgray; padding: 2px 4px; border-radius: 0 2px 2px 0;"),console.info("The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics."),console.info("Github:  https://github.com/timmaurice/lovelace-background-graph-entities.git"),console.info("Sponsor: https://buymeacoffee.com/timmaurice"),console.groupEnd(),"function"==typeof SuppressedError&&SuppressedError;
+function t(t,e,n,i){var r,o=arguments.length,s=o<3?e:null===i?i=Object.getOwnPropertyDescriptor(e,n):i;if("object"==typeof Reflect&&"function"==typeof Reflect.decorate)s=Reflect.decorate(t,e,n,i);else for(var a=t.length-1;a>=0;a--)(r=t[a])&&(s=(o<3?r(s):o>3?r(e,n,s):r(e,n))||s);return o>3&&s&&Object.defineProperty(e,n,s),s}console.groupCollapsed("%cBACKGROUND GRAPH ENTITIES%cv1.2.0","color: orange; font-weight: bold; background: black; padding: 2px 4px; border-radius: 2px 0 0 2px;","color: white; font-weight: bold; background: dimgray; padding: 2px 4px; border-radius: 0 2px 2px 0;"),console.info("The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics."),console.info("Github:  https://github.com/timmaurice/lovelace-background-graph-entities.git"),console.info("Sponsor: https://buymeacoffee.com/timmaurice"),console.groupEnd(),"function"==typeof SuppressedError&&SuppressedError;
 /**
  * @license
  * Copyright 2019 Google LLC
@@ -204,7 +204,14 @@ const ht=t=>(e,n)=>{void 0!==n?n.addInitializer(()=>{customElements.define(t,e)}
           data-index=${n}
           @change=${e}
         ></ha-textfield>
-        <ha-textfield .label=${Vo(this.hass,"component.bge.editor.graph_max")} type="number" .value=${t.graph_max??""} data-field="graph_max" data-index=${n} @change=${e}></ha-textfield>
+        <ha-textfield
+          .label=${Vo(this.hass,"component.bge.editor.graph_max")}
+          type="number"
+          .value=${t.graph_max??""}
+          data-field="graph_max"
+          data-index=${n}
+          @change=${e}
+        ></ha-textfield>
       </div>
     `}_renderEntityGraphAppearanceEditor(t){const e=this._config.entities[t];if(!e)return q``;const n=(e.color_thresholds?.length??0)>0?"threshold":"single",i=this.hass.themes?.darkMode??!1?"white":"black",r=e.line_color||this._config.line_color||i;return q`
       <div class="overrides">
