@@ -64,6 +64,8 @@ export interface EntityConfig {
   line_color?: string;
   line_opacity?: number;
   color_thresholds?: ColorThreshold[];
+  graph_min?: number;
+  graph_max?: number;
 }
 
 export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
@@ -80,4 +82,6 @@ export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
   curve?: 'spline' | 'linear' | 'natural' | 'step';
   line_glow?: boolean;
   tile_style?: boolean;
+  graph_min?: number;
+  graph_max?: number;
 }

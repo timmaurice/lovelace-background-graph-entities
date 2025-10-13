@@ -497,6 +497,33 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     `;
   }
 
+  private _renderGraphBoundsEditor(
+    config: Partial<BackgroundGraphEntitiesConfig> | Partial<EntityConfig>,
+    changeHandler: (ev: Event) => void,
+    index?: number,
+  ): TemplateResult {
+    return html`
+      <div class="side-by-side">
+        <ha-textfield
+          .label=${localize(this.hass, 'component.bge.editor.graph_min')}
+          type="number"
+          .value=${config.graph_min ?? ''}
+          data-field="graph_min"
+          data-index=${index}
+          @change=${changeHandler}
+        ></ha-textfield>
+        <ha-textfield
+          .label=${localize(this.hass, 'component.bge.editor.graph_max')}
+          type="number"
+          .value=${config.graph_max ?? ''}
+          data-field="graph_max"
+          data-index=${index}
+          @change=${changeHandler}
+        ></ha-textfield>
+      </div>
+    `;
+  }
+
   private _renderEntityGraphAppearanceEditor(index: number): TemplateResult {
     const entityConf = this._config.entities[index];
     if (!entityConf) return html``;
@@ -526,6 +553,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             pin
           ></ha-slider>
         </div>
+
+        ${this._renderGraphBoundsEditor(entityConf, this._entityAttributeChanged, index)}
 
         <ha-select
           .label=${localize(this.hass, 'component.bge.editor.color_mode')}
@@ -740,6 +769,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             @change=${this._valueChanged}
           ></ha-switch>
         </ha-formfield>
+
+        ${this._renderGraphBoundsEditor(this._config, this._valueChanged)}
 
         <div class="opacity-slider-container">
           <div class="label-container">

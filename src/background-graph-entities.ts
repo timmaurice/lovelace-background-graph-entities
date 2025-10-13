@@ -508,14 +508,27 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     const yDomain = extent(processedHistory, (d) => d.value) as [number, number];
 
+    // Determine min and max from config, with entity override
+    const graphMin =
+      entityConfig?.overwrite_graph_appearance && entityConfig.graph_min !== undefined
+        ? entityConfig.graph_min
+        : this._config.graph_min;
+    const graphMax =
+      entityConfig?.overwrite_graph_appearance && entityConfig.graph_max !== undefined
+        ? entityConfig.graph_max
+        : this._config.graph_max;
+
+    if (typeof graphMin === 'number') yDomain[0] = graphMin;
+    if (typeof graphMax === 'number') yDomain[1] = graphMax;
+
     if (yDomain[0] === yDomain[1]) {
       yDomain[0] -= 1;
       yDomain[1] += 1;
     }
 
-    const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR;
-    yDomain[0] -= yPadding;
-    yDomain[1] += yPadding;
+    const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR; // Use padding only if bounds are not fixed
+    if (typeof graphMin !== 'number') yDomain[0] -= yPadding;
+    if (typeof graphMax !== 'number') yDomain[1] += yPadding;
 
     const xScale = scaleTime().domain(xDomain).range([0, width]);
     const yScale = scaleLinear().domain(yDomain).range([height, 0]);

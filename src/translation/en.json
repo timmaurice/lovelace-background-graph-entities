@@ -37,6 +37,8 @@
     "curve_spline": "Spline",
     "curve_linear": "Linear",
     "curve_step": "Step",
-    "curve_natural": "Natural"
+    "curve_natural": "Natural",
+    "graph_min": "Graph Lower Bound",
+    "graph_max": "Graph Upper Bound"
   }
 }

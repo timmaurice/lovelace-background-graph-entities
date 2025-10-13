@@ -102,6 +102,8 @@ The card is fully configurable through the UI editor.
 | `line_glow`        | boolean | `false`      | Adds a subtle glow effect to the graph line.                                                                                                                                                                                          |
 | `curve`            | string  | `spline`     | The interpolation type for the graph line. Can be `spline`, `linear`, `natural`, or `step`.                                                                                                                                           |
 | `color_thresholds` | list    | `[]`         | A list of color thresholds to create a gradient line. See Advanced Example.                                                                                                                                                           |
+| `graph_min`        | number  | `undefined`  | Sets a fixed lower bound for the Y-axis of the graph.                                                                                                                                                                                 |
+| `graph_max`        | number  | `undefined`  | Sets a fixed upper bound for the Y-axis of the graph.                                                                                                                                                                                 |
 | `points_per_hour`  | number  | `1`          | The number of time buckets per hour. The card calculates the median value for each bucket and fills in any gaps with the last known value to create a continuous graph. Higher values provide more detail but may impact performance. |
 | `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes).                                                                                                                                                                 |
 
@@ -121,6 +123,8 @@ Each entry in the `entities` list can be a string (the entity ID) or an object w
 | `line_color`                 | string  | Global `line_color`       | Overrides the global `line_color` for this entity only.                                                   |
 | `line_opacity`               | number  | Global `line_opacity`     | Overrides the global `line_opacity` for this entity only.                                                 |
 | `color_thresholds`           | list    | Global `color_thresholds` | Overrides the global `color_thresholds` for this entity only.                                             |
+| `graph_min`                  | number  | Global `graph_min`        | Overrides the global `graph_min` for this entity only.                                                    |
+| `graph_max`                  | number  | Global `graph_max`        | Overrides the global `graph_max` for this entity only.                                                    |
 
 ### Examples
 

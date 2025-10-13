@@ -37,6 +37,8 @@
     "curve_spline": "Spline",
     "curve_linear": "Linéaire",
     "curve_step": "Marche",
-    "curve_natural": "Naturelle"
+    "curve_natural": "Naturelle",
+    "graph_min": "Limite inférieure du graphique",
+    "graph_max": "Limite supérieure du graphique"
   }
 }

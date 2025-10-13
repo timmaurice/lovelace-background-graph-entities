@@ -5,6 +5,11 @@ import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../
 // Mock console.info before the module is imported to prevent version logging.
 vi.spyOn(console, 'info').mockImplementation(() => {});
 
+// Mock requestAnimationFrame for the JSDOM environment
+window.requestAnimationFrame = vi.fn().mockImplementation((cb) => setTimeout(() => cb(0), 0) as unknown as number);
+window.cancelAnimationFrame = vi.fn().mockImplementation((id) => clearTimeout(id));
+
+import { scaleLinear } from 'd3-scale';
 // Define a minimal interface for the ha-card element to satisfy TypeScript
 interface HaCard extends HTMLElement {
   header?: string;
@@ -14,6 +19,12 @@ interface HaCard extends HTMLElement {
 interface HaSwitch extends HTMLElement {
   checked?: boolean;
 }
+
+vi.mock('d3-scale', async () => {
+  const originalModule = await vi.importActual<typeof import('d3-scale')>('d3-scale');
+  // We spy on scaleLinear to be able to check the domain it was called with.
+  return { ...originalModule, scaleLinear: vi.fn(originalModule.scaleLinear) };
+});
 
 describe('BackgroundGraphEntities', () => {
   let element: BackgroundGraphEntitiesType;
@@ -68,10 +79,19 @@ describe('BackgroundGraphEntities', () => {
 
   afterEach(() => {
     document.body.removeChild(element);
+    vi.mocked(scaleLinear).mockClear();
     vi.clearAllMocks();
   });
 
   describe('Basic Rendering and Configuration', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should create the component instance', () => {
       expect(element).toBeInstanceOf(BackgroundGraphEntities);
     });
@@ -129,7 +149,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       // Wait for the requestAnimationFrame in `updated()` to fire and render the D3 graph.
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await vi.runAllTimersAsync();
 
       const graphContainer = element.shadowRoot?.querySelector('.graph-container');
       const svg = graphContainer?.querySelector('svg');
@@ -320,16 +340,10 @@ describe('BackgroundGraphEntities', () => {
       // breaks the real requestAnimationFrame. We mock it with a setTimeout to make it async,
       // which we can then control with fake timers. This prevents stack overflows that can
       // occur from recursive rAF calls in the component's rendering retry logic.
-      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-        setTimeout(() => cb(0), 1);
-        return 0; // Return a dummy number to satisfy the return type
-      });
     });
 
     afterEach(() => {
       vi.useRealTimers();
-      // Restore the original requestAnimationFrame
-      (window.requestAnimationFrame as Mock).mockRestore();
     });
 
     it('should return correct card size', () => {
@@ -562,6 +576,101 @@ describe('BackgroundGraphEntities', () => {
 
       const secondaryValue = element.shadowRoot?.querySelector('.secondary-value');
       expect(secondaryValue).toBeNull();
+    });
+  });
+
+  describe('Graph Y-axis bounds', () => {
+    const Y_AXIS_PADDING_FACTOR = 0.1;
+    const historyData = [
+      { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '10' }, // min
+      { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '20' }, // max
+    ];
+
+    beforeEach(() => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': historyData });
+      config.hours_to_show = 2; // Set a smaller window for predictable downsampling
+      config.points_per_hour = 1;
+      element.hass = hass;
+      vi.useFakeTimers();
+    });
+
+    it('should use automatic bounds with padding by default', async () => {
+      element.setConfig(config);
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+
+      const yDomain = [10, 20];
+      const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR;
+      const expectedDomain = [yDomain[0] - yPadding, yDomain[1] + yPadding]; // [9, 21]
+
+      expect(scaleLinear).toHaveBeenCalled();
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual(expectedDomain);
+    });
+
+    it('should use global graph_min and graph_max when set', async () => {
+      element.setConfig({ ...config, graph_min: 0, graph_max: 50 });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+
+      expect(scaleLinear).toHaveBeenCalled();
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([0, 50]);
+    });
+
+    it('should use only global graph_min when set', async () => {
+      element.setConfig({ ...config, graph_min: 0 });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+
+      const yDomain = [0, 20]; // min is overridden
+      const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR;
+      const expectedDomain = [0, yDomain[1] + yPadding]; // [0, 22]
+
+      expect(scaleLinear).toHaveBeenCalled();
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual(expectedDomain);
+    });
+
+    it('should use per-entity bounds which override global bounds', async () => {
+      element.setConfig({
+        ...config,
+        graph_min: 0,
+        graph_max: 50,
+        entities: [
+          {
+            entity: 'sensor.test',
+            overwrite_graph_appearance: true,
+            graph_min: 5,
+            graph_max: 25,
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+
+      expect(scaleLinear).toHaveBeenCalled();
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([5, 25]);
+    });
+
+    it('should not apply padding when both bounds are fixed', async () => {
+      element.setConfig({
+        ...config,
+        graph_min: 0,
+        graph_max: 50,
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+
+      // The domain should be exactly [0, 50], not [0 - padding, 50 + padding]
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([0, 50]);
     });
   });
 
