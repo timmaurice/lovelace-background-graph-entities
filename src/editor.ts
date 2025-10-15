@@ -509,6 +509,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           type="number"
           .value=${config.graph_min ?? ''}
           data-field="graph_min"
+          .configValue=${'graph_min'}
           data-index=${index}
           @change=${changeHandler}
         ></ha-textfield>
@@ -517,6 +518,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           type="number"
           .value=${config.graph_max ?? ''}
           data-field="graph_max"
+          .configValue=${'graph_max'}
           data-index=${index}
           @change=${changeHandler}
         ></ha-textfield>
