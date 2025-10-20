@@ -1,4 +1,4 @@
-function t(t,e,n,i){var r,o=arguments.length,s=o<3?e:null===i?i=Object.getOwnPropertyDescriptor(e,n):i;if("object"==typeof Reflect&&"function"==typeof Reflect.decorate)s=Reflect.decorate(t,e,n,i);else for(var a=t.length-1;a>=0;a--)(r=t[a])&&(s=(o<3?r(s):o>3?r(e,n,s):r(e,n))||s);return o>3&&s&&Object.defineProperty(e,n,s),s}console.groupCollapsed("%cBACKGROUND GRAPH ENTITIES%cv1.2.1","color: orange; font-weight: bold; background: black; padding: 2px 4px; border-radius: 2px 0 0 2px;","color: white; font-weight: bold; background: dimgray; padding: 2px 4px; border-radius: 0 2px 2px 0;"),console.info("The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics."),console.info("Github:  https://github.com/timmaurice/lovelace-background-graph-entities.git"),console.info("Sponsor: https://buymeacoffee.com/timmaurice"),console.groupEnd(),"function"==typeof SuppressedError&&SuppressedError;
+function t(t,e,n,i){var r,o=arguments.length,s=o<3?e:null===i?i=Object.getOwnPropertyDescriptor(e,n):i;if("object"==typeof Reflect&&"function"==typeof Reflect.decorate)s=Reflect.decorate(t,e,n,i);else for(var a=t.length-1;a>=0;a--)(r=t[a])&&(s=(o<3?r(s):o>3?r(e,n,s):r(e,n))||s);return o>3&&s&&Object.defineProperty(e,n,s),s}console.groupCollapsed("%cBACKGROUND GRAPH ENTITIES%cv1.2.2","color: orange; font-weight: bold; background: black; padding: 2px 4px; border-radius: 2px 0 0 2px;","color: white; font-weight: bold; background: dimgray; padding: 2px 4px; border-radius: 0 2px 2px 0;"),console.info("The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics."),console.info("Github:  https://github.com/timmaurice/lovelace-background-graph-entities.git"),console.info("Sponsor: https://buymeacoffee.com/timmaurice"),console.groupEnd(),"function"==typeof SuppressedError&&SuppressedError;
 /**
  * @license
  * Copyright 2019 Google LLC
@@ -92,7 +92,7 @@ const ht=t=>(e,n)=>{void 0!==n?n.addInitializer(()=>{customElements.define(t,e)}
                   @click=${e=>{e.stopPropagation(),this._toggleEntity(t.entity)}}
                 ></ha-switch>
               </div>
-            `:q`<div class="entity-value" style="text-transform: capitalize;">
+            `:q`<div class="entity-value">
               <span class="primary-value">${o}</span>
               ${!s&&u?q`<span class="secondary-value">· ${u}</span>`:""}
             </div>`}

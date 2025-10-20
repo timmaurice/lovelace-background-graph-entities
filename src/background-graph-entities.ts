@@ -433,7 +433,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
                 ></ha-switch>
               </div>
             `
-          : html`<div class="entity-value" style="text-transform: capitalize;">
+          : html`<div class="entity-value">
               <span class="primary-value">${displayValue}</span>
               ${!hasToggle && secondaryDisplayValue
                 ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
