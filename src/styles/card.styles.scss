@@ -101,6 +101,7 @@
 .entity-value {
   color: var(--primary-text-color);
   margin-left: auto;
+  text-transform: none !important;
   z-index: 1;
 }
 
