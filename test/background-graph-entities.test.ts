@@ -801,4 +801,67 @@ describe('BackgroundGraphEntities', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('Hide Icon Feature', () => {
+    it('should show icons by default', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+
+      const row = element.shadowRoot?.querySelector('.entity-row');
+      expect(row?.classList.contains('no-icon')).toBe(false);
+      expect(row?.querySelector('ha-state-icon')).not.toBeNull();
+    });
+
+    it('should hide icons when show_icon is false globally', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, show_icon: false });
+      await element.updateComplete;
+
+      const row = element.shadowRoot?.querySelector('.entity-row');
+      expect(row?.classList.contains('no-icon')).toBe(true);
+      expect(row?.querySelector('ha-state-icon')).toBeNull();
+    });
+
+    it('should hide icons for specific entities', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [
+          { entity: 'sensor.test', show_icon: false },
+          { entity: 'sensor.show', show_icon: true },
+        ],
+      });
+      // Add sensor.show to hass
+      hass.states['sensor.show'] = {
+        entity_id: 'sensor.show',
+        state: '456',
+        attributes: { friendly_name: 'Show Sensor' },
+      };
+      await element.updateComplete;
+
+      const rows = element.shadowRoot?.querySelectorAll('.entity-row');
+      expect(rows).toHaveLength(2);
+
+      expect(rows?.[0].classList.contains('no-icon')).toBe(true);
+      expect(rows?.[0].querySelector('ha-state-icon')).toBeNull();
+
+      expect(rows?.[1].classList.contains('no-icon')).toBe(false);
+      expect(rows?.[1].querySelector('ha-state-icon')).not.toBeNull();
+    });
+
+    it('should hide icon for unavailable entities when show_icon is false', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.unavailable', show_icon: false }],
+      });
+      await element.updateComplete;
+
+      const row = element.shadowRoot?.querySelector('.entity-row.unavailable');
+      expect(row).not.toBeNull();
+      expect(row?.classList.contains('no-icon')).toBe(true);
+      expect(row?.querySelector('ha-icon')).toBeNull();
+    });
+  });
 });

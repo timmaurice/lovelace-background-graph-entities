@@ -309,6 +309,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const isActive = hasToggle && stateObj.state === 'on';
     const iconColor = entityConfig.icon_color;
     const showGraphState = entityConfig.show_graph_entity_state ?? false;
+    const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
 
     let secondaryDisplayValue: string | undefined;
     if (entityConfig.graph_entity && showGraphState) {
@@ -360,34 +361,38 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     if (isTileStyle) {
       return html`
         <div
-          class="entity-row"
+          class="entity-row ${showIcon ? '' : 'no-icon'}"
           style=${iconColor ? `--bge-icon-color: ${iconColor}` : ''}
           @click=${() => this._openEntityPopup(entityConfig.entity)}
         >
-          <div
-            class="icon-container ${hasToggle ? (isActive ? 'active' : 'inactive') : ''}"
-            role=${hasToggle ? 'button' : 'img'}
-            aria-label=${hasToggle ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
-            aria-pressed=${hasToggle ? isActive : 'false'}
-            tabindex=${hasToggle ? '0' : '-1'}
-            @click=${(e: Event) => {
-              if (hasToggle) {
-                e.stopPropagation();
-                this._toggleEntity(entityConfig.entity);
-              }
-            }}
-            @keydown=${hasToggle ? handleKeyboardToggle : null}
-          >
-            ${entityConfig.icon
-              ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
-              : html`<ha-state-icon
-                  class="entity-icon"
-                  .hass=${this.hass}
-                  .stateObj=${stateObj}
-                  .stateColor=${isTileStyle}
-                  style=${iconStyle}
-                ></ha-state-icon>`}
-          </div>
+          ${showIcon
+            ? html`
+                <div
+                  class="icon-container ${hasToggle ? (isActive ? 'active' : 'inactive') : ''}"
+                  role=${hasToggle ? 'button' : 'img'}
+                  aria-label=${hasToggle ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
+                  aria-pressed=${hasToggle ? isActive : 'false'}
+                  tabindex=${hasToggle ? '0' : '-1'}
+                  @click=${(e: Event) => {
+                    if (hasToggle) {
+                      e.stopPropagation();
+                      this._toggleEntity(entityConfig.entity);
+                    }
+                  }}
+                  @keydown=${hasToggle ? handleKeyboardToggle : null}
+                >
+                  ${entityConfig.icon
+                    ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
+                    : html`<ha-state-icon
+                        class="entity-icon"
+                        .hass=${this.hass}
+                        .stateObj=${stateObj}
+                        .stateColor=${isTileStyle}
+                        style=${iconStyle}
+                      ></ha-state-icon>`}
+                </div>
+              `
+            : ''}
           <div class="entity-info">
             <div class="entity-name">
               ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
@@ -403,16 +408,18 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
 
     return html`
-      <div class="entity-row" @click=${() => this._openEntityPopup(entityConfig.entity)}>
-        ${entityConfig.icon
-          ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
-          : html`<ha-state-icon
-              class="entity-icon"
-              .hass=${this.hass}
-              .stateObj=${stateObj}
-              .stateColor=${isTileStyle}
-              style=${iconStyle}
-            ></ha-state-icon>`}
+      <div class="entity-row ${showIcon ? '' : 'no-icon'}" @click=${() => this._openEntityPopup(entityConfig.entity)}>
+        ${showIcon
+          ? entityConfig.icon
+            ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
+            : html`<ha-state-icon
+                class="entity-icon"
+                .hass=${this.hass}
+                .stateObj=${stateObj}
+                .stateColor=${isTileStyle}
+                style=${iconStyle}
+              ></ha-state-icon>`
+          : ''}
         <div class="entity-name">
           ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
           ${hasToggle && !isTileStyle && secondaryDisplayValue
@@ -444,9 +451,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   private _renderUnavailableEntityRow(entityConfig: EntityConfig): TemplateResult {
+    const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
     return html`
-      <div class="entity-row unavailable" @click=${() => this._openEntityPopup(entityConfig.entity)}>
-        <ha-icon class="entity-icon" icon=${UNAVAILABLE_ICON}></ha-icon>
+      <div
+        class="entity-row unavailable ${showIcon ? '' : 'no-icon'}"
+        @click=${() => this._openEntityPopup(entityConfig.entity)}
+      >
+        ${showIcon ? html`<ha-icon class="entity-icon" icon=${UNAVAILABLE_ICON}></ha-icon>` : ''}
         <div class="entity-name">${entityConfig.name || entityConfig.entity}</div>
         <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
         <div class="entity-value">${this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT}</div>

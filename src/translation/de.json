@@ -39,6 +39,7 @@
     "curve_step": "Stufe",
     "curve_natural": "Natürlich",
     "graph_min": "Untere Graph-Grenze",
-    "graph_max": "Obere Graph-Grenze"
+    "graph_max": "Obere Graph-Grenze",
+    "show_icon": "Icon anzeigen"
   }
 }

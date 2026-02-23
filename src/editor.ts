@@ -173,7 +173,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         value = target.value === '' ? undefined : Number(target.value);
       }
 
-      if (value === false || value === undefined || (typeof value === 'number' && isNaN(value))) {
+      if (value === undefined || (typeof value === 'number' && isNaN(value))) {
         delete newConfig[configValue];
       } else {
         newConfig[configValue] = value;
@@ -193,11 +193,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
     this._updateEntityOrGlobalConfig(index, (entityConf) => {
       const newEntityConf = { ...entityConf };
-      if (isChecked) {
-        (newEntityConf as Partial<EntityConfig>)[field] = true as never;
-      } else {
-        delete (newEntityConf as Partial<EntityConfig>)[field];
-      }
+      (newEntityConf as Partial<EntityConfig>)[field] = isChecked as never;
       return newEntityConf;
     });
   }
@@ -443,6 +439,15 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           data-field="graph_entity"
           @value-changed=${this._entityAttributeChanged}
         ></ha-entity-picker>
+
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
+          <ha-switch
+            .checked=${entityConf.show_icon !== false}
+            data-index=${this._editingIndex}
+            data-field="show_icon"
+            @change=${this._entitySwitchChanged}
+          ></ha-switch>
+        </ha-formfield>
 
         ${entityConf.graph_entity
           ? html`
@@ -714,6 +719,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-switch
             .checked=${this._config.tile_style === true}
             .configValue=${'tile_style'}
+            @change=${this._valueChanged}
+          ></ha-switch>
+        </ha-formfield>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
+          <ha-switch
+            .checked=${this._config.show_icon !== false}
+            .configValue=${'show_icon'}
             @change=${this._valueChanged}
           ></ha-switch>
         </ha-formfield>

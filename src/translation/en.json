@@ -39,6 +39,7 @@
     "curve_step": "Step",
     "curve_natural": "Natural",
     "graph_min": "Graph Lower Bound",
-    "graph_max": "Graph Upper Bound"
+    "graph_max": "Graph Upper Bound",
+    "show_icon": "Show Icon"
   }
 }

@@ -132,6 +132,10 @@
   right: 0;
   top: 0;
 
+  .no-icon & {
+    left: 0;
+  }
+
   svg {
     height: 100%;
     width: 100%;

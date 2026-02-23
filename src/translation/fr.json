@@ -39,6 +39,7 @@
     "curve_step": "Marche",
     "curve_natural": "Naturelle",
     "graph_min": "Limite inférieure du graphique",
-    "graph_max": "Limite supérieure du graphique"
+    "graph_max": "Limite supérieure du graphique",
+    "show_icon": "Afficher l'icône"
   }
 }

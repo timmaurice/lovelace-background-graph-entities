@@ -106,6 +106,7 @@ The card is fully configurable through the UI editor.
 | `graph_max`        | number  | `undefined`  | Sets a fixed upper bound for the Y-axis of the graph.                                                                                                                                                                                 |
 | `points_per_hour`  | number  | `1`          | The number of time buckets per hour. The card calculates the median value for each bucket and fills in any gaps with the last known value to create a continuous graph. Higher values provide more detail but may impact performance. |
 | `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes).                                                                                                                                                                 |
+| `show_icon`        | boolean | `true`       | Set to `false` to hide the entity icon.                                                                                                                                                                                               |
 
 #### Entity Options
 
@@ -125,6 +126,7 @@ Each entry in the `entities` list can be a string (the entity ID) or an object w
 | `color_thresholds`           | list    | Global `color_thresholds` | Overrides the global `color_thresholds` for this entity only.                                             |
 | `graph_min`                  | number  | Global `graph_min`        | Overrides the global `graph_min` for this entity only.                                                    |
 | `graph_max`                  | number  | Global `graph_max`        | Overrides the global `graph_max` for this entity only.                                                    |
+| `show_icon`                  | boolean | Global `show_icon`        | Overrides the global `show_icon` for this entity only.                                                    |
 
 ### Examples
 
