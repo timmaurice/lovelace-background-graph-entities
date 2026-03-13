@@ -175,3 +175,14 @@ h3 {
 .add-entity-button {
   width: fit-content;
 }
+
+.dropdown-trigger {
+  position: relative;
+  cursor: pointer;
+  display: block;
+}
+
+.dropdown-textfield {
+  width: 100%;
+  pointer-events: none; /* Let the wrapper consume the click event to open the dropdown */
+}

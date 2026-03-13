@@ -563,17 +563,34 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
         ${this._renderGraphBoundsEditor(entityConf, this._entityAttributeChanged, index)}
 
-        <ha-select
-          .label=${localize(this.hass, 'component.bge.editor.color_mode')}
-          .value=${colorMode}
-          @selected=${(e: Event) => this._handleColorModeChange(e, index)}
-          @closed=${(ev: Event) => ev.stopPropagation()}
-        >
-          <mwc-list-item value="single">${localize(this.hass, 'component.bge.editor.color_mode_single')}</mwc-list-item>
-          <mwc-list-item value="threshold"
-            >${localize(this.hass, 'component.bge.editor.color_mode_threshold')}</mwc-list-item
+        <div class="dropdown-wrapper" style="margin-top: 8px;">
+          <ha-dropdown
+            @wa-select=${(ev: CustomEvent) => {
+              const target = { value: ev.detail.item.value };
+              this._handleColorModeChange({ target } as unknown as Event, index);
+            }}
           >
-        </ha-select>
+            <div slot="trigger" class="dropdown-trigger">
+              <ha-textfield
+                readonly
+                .label=${localize(this.hass, 'component.bge.editor.color_mode')}
+                .value=${colorMode === 'single'
+                  ? localize(this.hass, 'component.bge.editor.color_mode_single')
+                  : localize(this.hass, 'component.bge.editor.color_mode_threshold')}
+                iconTrailing
+                class="dropdown-textfield"
+              >
+                <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+              </ha-textfield>
+            </div>
+            <ha-dropdown-item value="single"
+              >${localize(this.hass, 'component.bge.editor.color_mode_single')}</ha-dropdown-item
+            >
+            <ha-dropdown-item value="threshold"
+              >${localize(this.hass, 'component.bge.editor.color_mode_threshold')}</ha-dropdown-item
+            >
+          </ha-dropdown>
+        </div>
 
         ${colorMode === 'single'
           ? html`
@@ -750,30 +767,72 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         </div>
 
         <div class="side-by-side">
-          <ha-select
-            .label=${localize(this.hass, 'component.bge.editor.line_length')}
-            .value=${this._config.line_length || 'long'}
-            .configValue=${'line_length'}
-            @selected=${this._valueChanged}
-            @closed=${(ev: Event) => ev.stopPropagation()}
-          >
-            <mwc-list-item value="long">${localize(this.hass, 'component.bge.editor.line_length_long')}</mwc-list-item>
-            <mwc-list-item value="short"
-              >${localize(this.hass, 'component.bge.editor.line_length_short')}</mwc-list-item
+          <div class="dropdown-wrapper" style="margin-top: 8px;">
+            <ha-dropdown
+              @wa-select=${(ev: CustomEvent) => {
+                const target = { configValue: 'line_length', value: ev.detail.item.value } as unknown as EventTarget;
+                this._valueChanged({ target } as unknown as Event);
+              }}
             >
-          </ha-select>
-          <ha-select
-            .label=${localize(this.hass, 'component.bge.editor.curve')}
-            .value=${this._config.curve || 'spline'}
-            .configValue=${'curve'}
-            @selected=${this._valueChanged}
-            @closed=${(ev: Event) => ev.stopPropagation()}
-          >
-            <mwc-list-item value="spline">${localize(this.hass, 'component.bge.editor.curve_spline')}</mwc-list-item>
-            <mwc-list-item value="linear">${localize(this.hass, 'component.bge.editor.curve_linear')}</mwc-list-item>
-            <mwc-list-item value="natural">${localize(this.hass, 'component.bge.editor.curve_natural')}</mwc-list-item>
-            <mwc-list-item value="step">${localize(this.hass, 'component.bge.editor.curve_step')}</mwc-list-item>
-          </ha-select>
+              <div slot="trigger" class="dropdown-trigger">
+                <ha-textfield
+                  readonly
+                  .label=${localize(this.hass, 'component.bge.editor.line_length')}
+                  .value=${this._config.line_length === 'short'
+                    ? localize(this.hass, 'component.bge.editor.line_length_short')
+                    : localize(this.hass, 'component.bge.editor.line_length_long')}
+                  iconTrailing
+                  class="dropdown-textfield"
+                >
+                  <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+                </ha-textfield>
+              </div>
+              <ha-dropdown-item value="long"
+                >${localize(this.hass, 'component.bge.editor.line_length_long')}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="short"
+                >${localize(this.hass, 'component.bge.editor.line_length_short')}</ha-dropdown-item
+              >
+            </ha-dropdown>
+          </div>
+          <div class="dropdown-wrapper" style="margin-top: 8px;">
+            <ha-dropdown
+              @wa-select=${(ev: CustomEvent) => {
+                const target = { configValue: 'curve', value: ev.detail.item.value } as unknown as EventTarget;
+                this._valueChanged({ target } as unknown as Event);
+              }}
+            >
+              <div slot="trigger" class="dropdown-trigger">
+                <ha-textfield
+                  readonly
+                  .label=${localize(this.hass, 'component.bge.editor.curve')}
+                  .value=${this._config.curve === 'linear'
+                    ? localize(this.hass, 'component.bge.editor.curve_linear')
+                    : this._config.curve === 'natural'
+                      ? localize(this.hass, 'component.bge.editor.curve_natural')
+                      : this._config.curve === 'step'
+                        ? localize(this.hass, 'component.bge.editor.curve_step')
+                        : localize(this.hass, 'component.bge.editor.curve_spline')}
+                  iconTrailing
+                  class="dropdown-textfield"
+                >
+                  <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+                </ha-textfield>
+              </div>
+              <ha-dropdown-item value="spline"
+                >${localize(this.hass, 'component.bge.editor.curve_spline')}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="linear"
+                >${localize(this.hass, 'component.bge.editor.curve_linear')}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="natural"
+                >${localize(this.hass, 'component.bge.editor.curve_natural')}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="step"
+                >${localize(this.hass, 'component.bge.editor.curve_step')}</ha-dropdown-item
+              >
+            </ha-dropdown>
+          </div>
         </div>
 
         <ha-formfield .label=${localize(this.hass, 'component.bge.editor.line_glow')}>
@@ -803,19 +862,34 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         </div>
 
         <div class="side-by-side">
-          <ha-select
-            .label=${localize(this.hass, 'component.bge.editor.color_mode')}
-            .value=${colorMode}
-            @selected=${(e: Event) => this._handleColorModeChange(e, null)}
-            @closed=${(ev: Event) => ev.stopPropagation()}
-          >
-            <mwc-list-item value="single"
-              >${localize(this.hass, 'component.bge.editor.color_mode_single')}</mwc-list-item
+          <div class="dropdown-wrapper" style="margin-top: 8px;">
+            <ha-dropdown
+              @wa-select=${(ev: CustomEvent) => {
+                const target = { value: ev.detail.item.value };
+                this._handleColorModeChange({ target } as unknown as Event, null);
+              }}
             >
-            <mwc-list-item value="threshold"
-              >${localize(this.hass, 'component.bge.editor.color_mode_threshold')}</mwc-list-item
-            >
-          </ha-select>
+              <div slot="trigger" class="dropdown-trigger">
+                <ha-textfield
+                  readonly
+                  .label=${localize(this.hass, 'component.bge.editor.color_mode')}
+                  .value=${colorMode === 'single'
+                    ? localize(this.hass, 'component.bge.editor.color_mode_single')
+                    : localize(this.hass, 'component.bge.editor.color_mode_threshold')}
+                  iconTrailing
+                  class="dropdown-textfield"
+                >
+                  <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+                </ha-textfield>
+              </div>
+              <ha-dropdown-item value="single"
+                >${localize(this.hass, 'component.bge.editor.color_mode_single')}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="threshold"
+                >${localize(this.hass, 'component.bge.editor.color_mode_threshold')}</ha-dropdown-item
+              >
+            </ha-dropdown>
+          </div>
         </div>
 
         ${colorMode === 'single'
