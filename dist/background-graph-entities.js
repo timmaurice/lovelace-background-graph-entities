@@ -1,4 +1,4 @@
-function t(t,e,n,i){var r,o=arguments.length,s=o<3?e:null===i?i=Object.getOwnPropertyDescriptor(e,n):i;if("object"==typeof Reflect&&"function"==typeof Reflect.decorate)s=Reflect.decorate(t,e,n,i);else for(var a=t.length-1;a>=0;a--)(r=t[a])&&(s=(o<3?r(s):o>3?r(e,n,s):r(e,n))||s);return o>3&&s&&Object.defineProperty(e,n,s),s}console.groupCollapsed("%c📈 BACKGROUND GRAPH ENTITIES%cv1.3.0","color: orange; font-weight: bold; background: black; padding: 2px 4px; border-radius: 2px 0 0 2px;","color: white; font-weight: bold; background: dimgray; padding: 2px 4px; border-radius: 0 2px 2px 0;"),console.info("The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics."),console.info("Github:  https://github.com/timmaurice/lovelace-background-graph-entities.git"),console.info("Sponsor: https://buymeacoffee.com/timmaurice"),console.groupEnd(),"function"==typeof SuppressedError&&SuppressedError;
+function t(t,e,n,i){var r,o=arguments.length,s=o<3?e:null===i?i=Object.getOwnPropertyDescriptor(e,n):i;if("object"==typeof Reflect&&"function"==typeof Reflect.decorate)s=Reflect.decorate(t,e,n,i);else for(var a=t.length-1;a>=0;a--)(r=t[a])&&(s=(o<3?r(s):o>3?r(e,n,s):r(e,n))||s);return o>3&&s&&Object.defineProperty(e,n,s),s}console.groupCollapsed("%c📈 BACKGROUND GRAPH ENTITIES%cv1.3.1","color: orange; font-weight: bold; background: black; padding: 2px 4px; border-radius: 2px 0 0 2px;","color: white; font-weight: bold; background: dimgray; padding: 2px 4px; border-radius: 0 2px 2px 0;"),console.info("The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics."),console.info("Github:  https://github.com/timmaurice/lovelace-background-graph-entities.git"),console.info("Sponsor: https://buymeacoffee.com/timmaurice"),console.groupEnd(),"function"==typeof SuppressedError&&SuppressedError;
 /**
  * @license
  * Copyright 2019 Google LLC
@@ -253,7 +253,7 @@ const ct=t=>(e,n)=>{void 0!==n?n.addInitializer(()=>{customElements.define(t,e)}
         ${this._renderGraphBoundsEditor(e,this._entityAttributeChanged,t)}
 
         <div class="dropdown-wrapper" style="margin-top: 8px;">
-            <ha-dropdown
+          <ha-dropdown
             @wa-select=${e=>{const n={value:e.detail.item.value};this._handleColorModeChange({target:n},t)}}
           >
             <div slot="trigger" class="dropdown-trigger">
@@ -267,8 +267,12 @@ const ct=t=>(e,n)=>{void 0!==n?n.addInitializer(()=>{customElements.define(t,e)}
                 <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
               </ha-textfield>
             </div>
-            <ha-dropdown-item value="single">${Wo(this.hass,"component.bge.editor.color_mode_single")}</ha-dropdown-item>
-            <ha-dropdown-item value="threshold">${Wo(this.hass,"component.bge.editor.color_mode_threshold")}</ha-dropdown-item>
+            <ha-dropdown-item value="single"
+              >${Wo(this.hass,"component.bge.editor.color_mode_single")}</ha-dropdown-item
+            >
+            <ha-dropdown-item value="threshold"
+              >${Wo(this.hass,"component.bge.editor.color_mode_threshold")}</ha-dropdown-item
+            >
           </ha-dropdown>
         </div>
 
@@ -425,8 +429,12 @@ const ct=t=>(e,n)=>{void 0!==n?n.addInitializer(()=>{customElements.define(t,e)}
                   <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
                 </ha-textfield>
               </div>
-              <ha-dropdown-item value="long">${Wo(this.hass,"component.bge.editor.line_length_long")}</ha-dropdown-item>
-              <ha-dropdown-item value="short">${Wo(this.hass,"component.bge.editor.line_length_short")}</ha-dropdown-item>
+              <ha-dropdown-item value="long"
+                >${Wo(this.hass,"component.bge.editor.line_length_long")}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="short"
+                >${Wo(this.hass,"component.bge.editor.line_length_short")}</ha-dropdown-item
+              >
             </ha-dropdown>
           </div>
           <div class="dropdown-wrapper" style="margin-top: 8px;">
@@ -444,10 +452,18 @@ const ct=t=>(e,n)=>{void 0!==n?n.addInitializer(()=>{customElements.define(t,e)}
                   <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
                 </ha-textfield>
               </div>
-              <ha-dropdown-item value="spline">${Wo(this.hass,"component.bge.editor.curve_spline")}</ha-dropdown-item>
-              <ha-dropdown-item value="linear">${Wo(this.hass,"component.bge.editor.curve_linear")}</ha-dropdown-item>
-              <ha-dropdown-item value="natural">${Wo(this.hass,"component.bge.editor.curve_natural")}</ha-dropdown-item>
-              <ha-dropdown-item value="step">${Wo(this.hass,"component.bge.editor.curve_step")}</ha-dropdown-item>
+              <ha-dropdown-item value="spline"
+                >${Wo(this.hass,"component.bge.editor.curve_spline")}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="linear"
+                >${Wo(this.hass,"component.bge.editor.curve_linear")}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="natural"
+                >${Wo(this.hass,"component.bge.editor.curve_natural")}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="step"
+                >${Wo(this.hass,"component.bge.editor.curve_step")}</ha-dropdown-item
+              >
             </ha-dropdown>
           </div>
         </div>
@@ -494,8 +510,12 @@ const ct=t=>(e,n)=>{void 0!==n?n.addInitializer(()=>{customElements.define(t,e)}
                   <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
                 </ha-textfield>
               </div>
-              <ha-dropdown-item value="single">${Wo(this.hass,"component.bge.editor.color_mode_single")}</ha-dropdown-item>
-              <ha-dropdown-item value="threshold">${Wo(this.hass,"component.bge.editor.color_mode_threshold")}</ha-dropdown-item>
+              <ha-dropdown-item value="single"
+                >${Wo(this.hass,"component.bge.editor.color_mode_single")}</ha-dropdown-item
+              >
+              <ha-dropdown-item value="threshold"
+                >${Wo(this.hass,"component.bge.editor.color_mode_threshold")}</ha-dropdown-item
+              >
             </ha-dropdown>
           </div>
         </div>
