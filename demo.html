@@ -66,8 +66,18 @@
       .demo-config-container {
         flex: 1;
         background: #1e1e1e;
-        padding: 20px;
+        padding: 30px;
         overflow-x: auto;
+        display: flex;
+        justify-content: flex-start;
+      }
+      .demo-editor-container {
+        flex: 1;
+        background: #ffffff;
+        padding: 30px;
+        overflow-x: auto;
+        display: flex;
+        justify-content: center;
       }
       .demo-title {
         font-weight: bold;
@@ -85,6 +95,8 @@
         color: #d4d4d4;
         font-family: 'Consolas', 'Monaco', monospace;
         font-size: 0.9em;
+        width: 100%;
+        max-width: 400px;
       }
 
       #toast {
@@ -112,28 +124,28 @@
         opacity: 1;
         bottom: 50px;
       }
-    </style>
-  </head>
-  <body>
-    <div class="page-header">
-      <h1>Background Graph Entities</h1>
-      <p>Interactive Demo & Config Explorer</p>
-    </div>
 
-    <div id="toast"></div>
-
-    <div class="demo-grid" id="demo-grid"></div>
-
-    <script>
-      function showToast(message) {
-        const toast = document.getElementById('toast');
-        toast.textContent = message;
-        toast.className = 'show';
-        setTimeout(() => {
-          toast.className = toast.className.replace('show', '');
-        }, 3000);
+      .dark-mode {
+        --primary-text-color: #e1e1e1;
+        --secondary-text-color: #9e9e9e;
+        --paper-item-icon-color: #b0bec5;
+        --ha-card-background: #1c1c1c;
+        --divider-color: #333333;
+        --primary-color: #03a9f4;
+        --state-icon-color: #b0bec5;
+        --state-icon-active-color: #fdd835;
       }
-
+      .dark-mode-bg {
+        background: #2b2b2b !important;
+      }
+      .dark-mode-bg .demo-title {
+        color: #e1e1e1;
+      }
+      .dark-mode-bg p {
+        color: #9e9e9e !important;
+      }
+    </style>
+    <script>
       // Mock Home Assistant core UI components
       class HaCard extends HTMLElement {
         constructor() {
@@ -270,77 +282,359 @@
 
           this.shadowRoot.innerHTML = `
             <style>
-              :host {
-                display: inline-flex;
-                align-items: center;
-                cursor: pointer;
-                padding: 4px;
-              }
-              .switch-container {
-                position: relative;
-                width: 38px;
-                height: 14px;
-              }
-              .track {
-                width: 100%;
-                height: 100%;
-                background: ${bg};
-                border-radius: 7px;
-                opacity: 0.5;
-                transition: background 0.3s;
-              }
-              .thumb {
-                width: 20px;
-                height: 20px;
-                background: ${thumbBg};
-                border-radius: 50%;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-                position: absolute;
-                top: -3px;
-                left: 0;
-                transition: transform 0.3s, background 0.3s;
-                ${thumbTransform}
-              }
+              :host { display: inline-flex; align-items: center; cursor: pointer; padding: 4px; }
+              .switch-container { position: relative; width: 36px; height: 14px; background: ${bg}; border-radius: 7px; transition: background 0.28s; }
+              .thumb { position: absolute; top: -3px; left: -1px; width: 20px; height: 20px; background: ${thumbBg}; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); transition: transform 0.28s; ${thumbTransform} }
             </style>
-            <div class="switch-container" onclick="this.getRootNode().host.toggle()">
-              <div class="track"></div>
-              <div class="thumb"></div>
-            </div>
+            <div class="switch-container" @click="toggle()"><div class="thumb"></div></div>
           `;
+          this.shadowRoot.querySelector('.switch-container').addEventListener('click', () => this.toggle());
         }
       }
       customElements.define('ha-switch', HaSwitch);
+
+      // --- Editor Mock Components ---
+      class HaTextfield extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        get value() {
+          return this.shadowRoot.querySelector('input').value;
+        }
+        set value(val) {
+          if (this.shadowRoot.querySelector('input')) this.shadowRoot.querySelector('input').value = val || '';
+          this._value = val;
+        }
+        set label(val) {
+          this._label = val;
+          this.render();
+        }
+        set type(val) {
+          this._type = val;
+          this.render();
+        }
+        get type() {
+          return this.getAttribute('type') || this._type;
+        }
+        set configValue(val) {
+          this.dataset.configValue = val;
+        }
+        get configValue() {
+          return this.dataset.configValue;
+        }
+        connectedCallback() {
+          this.render();
+        }
+        render() {
+          this.shadowRoot.innerHTML = `
+            <style>
+              input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; font-size: 14px; }
+              label { font-size: 12px; color: #666; display: block; margin-bottom: 4px; font-family: inherit; }
+            </style>
+            <label>${this._label || ''}</label>
+            <input type="${this.getAttribute('type') || this._type || 'text'}" value="${this._value || ''}" />
+          `;
+          this.shadowRoot.querySelector('input').addEventListener('input', (e) => {
+            this._value = e.target.value;
+            this.dispatchEvent(new Event('value-changed', { bubbles: true, composed: true }));
+          });
+          this.shadowRoot.querySelector('input').addEventListener('change', (e) => {
+            this._value = e.target.value;
+            this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+          });
+        }
+      }
+      customElements.define('ha-textfield', HaTextfield);
+      customElements.define('ha-icon-picker', class extends HaTextfield {});
+      customElements.define('ha-entity-picker', class extends HaTextfield {});
+
+      class HaSlider extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        get value() {
+          return Number(this.shadowRoot.querySelector('input').value);
+        }
+        set value(val) {
+          if (this.shadowRoot.querySelector('input')) this.shadowRoot.querySelector('input').value = val;
+          this._value = val;
+        }
+        set min(val) {
+          this._min = val;
+          this.render();
+        }
+        set max(val) {
+          this._max = val;
+          this.render();
+        }
+        set step(val) {
+          this._step = val;
+          this.render();
+        }
+        set configValue(val) {
+          this.dataset.configValue = val;
+        }
+        get configValue() {
+          return this.dataset.configValue;
+        }
+        connectedCallback() {
+          this.render();
+        }
+        render() {
+          const min = this.getAttribute('min') ?? this._min ?? 0;
+          const max = this.getAttribute('max') ?? this._max ?? 100;
+          const step = this.getAttribute('step') ?? this._step ?? 1;
+          const val = this._value !== undefined ? this._value : (this.getAttribute('value') ?? min);
+          this.shadowRoot.innerHTML = `
+            <input type="range" min="${min}" max="${max}" step="${step}" value="${val}" style="width:100%" />
+          `;
+          this.shadowRoot.querySelector('input').addEventListener('input', (e) => {
+            this._value = e.target.value;
+            this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+            this.dispatchEvent(new Event('value-changed', { bubbles: true, composed: true }));
+          });
+        }
+      }
+      customElements.define('ha-slider', HaSlider);
+
+      class HaDropdown extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        get value() {
+          return this.shadowRoot.querySelector('select')?.value || this._value;
+        }
+        set value(val) {
+          this._value = val;
+          const select = this.shadowRoot.querySelector('select');
+          if (select) select.value = val;
+        }
+        set label(val) {
+          this._label = val;
+          this.render();
+        }
+        set configValue(val) {
+          this.dataset.configValue = val;
+        }
+        get configValue() {
+          return this.dataset.configValue;
+        }
+        connectedCallback() {
+          this.render();
+        }
+        render() {
+          this.shadowRoot.innerHTML = `
+            <style>
+              select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; font-size: 14px; }
+              .slot-container { display: none; }
+            </style>
+            <label style="font-size:12px; color:#666; display:block; font-family: inherit; margin-bottom: 4px;">${this._label || ''}</label>
+            <select></select>
+            <div class="slot-container"><slot></slot></div>
+          `;
+          this.shadowRoot.querySelector('select').addEventListener('change', (e) => {
+            this._value = e.target.value;
+            this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+            this.dispatchEvent(new Event('value-changed', { bubbles: true, composed: true }));
+            this.dispatchEvent(
+              new CustomEvent('wa-select', {
+                bubbles: true,
+                composed: true,
+                detail: { item: { value: e.target.value } },
+              }),
+            );
+          });
+
+          this.shadowRoot.querySelector('slot').addEventListener('slotchange', (e) => {
+            const select = this.shadowRoot.querySelector('select');
+            select.innerHTML = '';
+            const nodes = e.target.assignedNodes();
+            nodes.forEach((n) => {
+              if (n.tagName === 'HA-DROPDOWN-ITEM') {
+                const opt = document.createElement('option');
+                opt.value = n.getAttribute('value');
+                opt.textContent = n.textContent;
+                if (opt.value === this._value) opt.selected = true;
+                select.appendChild(opt);
+              }
+            });
+          });
+        }
+      }
+      customElements.define('ha-dropdown', HaDropdown);
+      customElements.define('ha-dropdown-item', class extends HTMLElement {});
+
+      class HaFormfield extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        set label(val) {
+          this._label = val;
+          this.render();
+        }
+        connectedCallback() {
+          this.render();
+        }
+        render() {
+          this.shadowRoot.innerHTML = `
+            <style>label { display: flex; align-items: center; font-family: inherit; font-size: 14px; gap: 8px; padding: 4px 0; }</style>
+            <label><slot></slot> ${this._label || ''}</label>
+          `;
+        }
+      }
+      customElements.define('ha-formfield', HaFormfield);
+
+      class HaButton extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        connectedCallback() {
+          this.shadowRoot.innerHTML = `<button style="padding: 6px 12px; border: none; background: #03a9f4; color: white; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 14px; margin-top: 8px;"><slot></slot></button>`;
+        }
+      }
+      customElements.define('ha-button', HaButton);
+
+      class HaIconButton extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        connectedCallback() {
+          this.shadowRoot.innerHTML = `<button style="background:none; border:none; cursor:pointer; padding: 4px;"><slot></slot></button>`;
+        }
+      }
+      customElements.define('ha-icon-button', HaIconButton);
+
+      class HaExpansionPanel extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        set header(val) {
+          this._header = val;
+          this.render();
+        }
+        connectedCallback() {
+          this.render();
+        }
+        render() {
+          this.shadowRoot.innerHTML = `
+            <details style="border: 1px solid #ccc; border-radius: 4px; padding: 12px; margin-bottom: 12px; font-family: inherit;">
+              <summary style="font-weight: 500; cursor: pointer; font-family: inherit; font-size: 15px;">${this._header || 'Details'}</summary>
+              <div style="margin-top: 12px;"><slot></slot></div>
+            </details>
+          `;
+        }
+      }
+      customElements.define('ha-expansion-panel', HaExpansionPanel);
+      // --- End Editor Mock Components ---
+    </script>
+  </head>
+  <body>
+    <div class="page-header">
+      <h1>Background Graph Entities</h1>
+      <p>Interactive Demo & Config Explorer</p>
+    </div>
+
+    <div id="toast"></div>
+
+    <div style="position: relative; text-align: center; margin: 0 auto 20px; max-width: 1000px">
+      <div class="demo-title" style="margin-bottom: 10px">Live Playground</div>
+      <p style="color: #666; font-size: 0.9em; margin: 0">
+        Configure the card below using the native editor. Changes reflect instantly!
+      </p>
+      <button
+        onclick="
+          localStorage.removeItem('bge_playground_config');
+          location.reload();
+        "
+        style="
+          position: absolute;
+          right: 0;
+          bottom: 0;
+          padding: 6px 12px;
+          background: #f0f0f0;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: inherit;
+          font-size: 13px;
+          color: #555;
+        "
+      >
+        Reset Config
+      </button>
+    </div>
+
+    <div class="demo-wrapper" id="playground-wrapper" style="max-width: 1500px; margin: 0 auto 60px">
+      <div class="demo-card-container" style="justify-content: flex-start; padding-top: 60px">
+        <div class="card-container" style="position: sticky; top: 60px">
+          <background-graph-entities id="live-preview"></background-graph-entities>
+        </div>
+      </div>
+      <div class="demo-editor-container">
+        <background-graph-entities-editor
+          id="live-editor"
+          style="width: 100%; max-width: 400px"
+        ></background-graph-entities-editor>
+      </div>
+      <div
+        class="demo-config-container"
+        style="justify-content: flex-start; align-items: flex-start; padding-top: 60px"
+      >
+        <pre id="live-yaml" style="width: 100%; max-width: 400px"></pre>
+      </div>
+    </div>
+
+    <div id="demo-grid" class="demo-grid"></div>
+
+    <script>
+      function showToast(message) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = 'show';
+        setTimeout(() => {
+          toast.className = toast.className.replace('show', '');
+        }, 3000);
+      }
 
       const setupDemos = async () => {
         await customElements.whenDefined('background-graph-entities');
 
         const now = Date.now() / 1000;
-        const generateHistory = (baseValue, variance, trend = 0) => {
+        const generateHistory = (finalValue, variance) => {
           const data = [];
-          for (let i = 24; i >= 0; i--) {
+          let currentVal = Number(finalValue);
+          for (let i = 0; i <= 24; i++) {
             data.push({
-              s: String(baseValue + (Math.random() * variance - variance / 2) + (24 - i) * trend),
+              s: String(currentVal),
               lu: now - i * 3600,
             });
+            currentVal = currentVal + (Math.random() * variance - variance / 2);
           }
-          return data;
+          return data.reverse();
         };
 
         const mockHass = {
           states: {
             'sensor.bedroom': {
               entity_id: 'sensor.bedroom',
-              state: '25.54',
-              attributes: { friendly_name: 'Bed room', unit_of_measurement: '°C' },
+              state: '23.5',
+              attributes: { friendly_name: 'Bedroom', unit_of_measurement: '°C' },
             },
             'sensor.living_room': {
               entity_id: 'sensor.living_room',
-              state: '24.07',
-              attributes: { friendly_name: 'Living room', unit_of_measurement: '°C' },
+              state: '22.8',
+              attributes: { friendly_name: 'Living Room', unit_of_measurement: '°C' },
             },
             'sensor.outside': {
               entity_id: 'sensor.outside',
-              state: '20.91',
+              state: '18.4',
               attributes: { friendly_name: 'Outside', unit_of_measurement: '°C' },
             },
             'sensor.humidity': {
@@ -362,10 +656,10 @@
             'switch.ac': { entity_id: 'switch.ac', icon: 'mdi:air-conditioner' },
           },
           callWS: async () => ({
-            'sensor.bedroom': generateHistory(25, 1, 0.05),
-            'sensor.living_room': generateHistory(24, 0.5, -0.02),
-            'sensor.outside': generateHistory(15, 3, 0.2),
-            'sensor.humidity': generateHistory(50, 10, -0.1),
+            'sensor.bedroom': generateHistory(mockHass.states['sensor.bedroom'].state, 0.5),
+            'sensor.living_room': generateHistory(mockHass.states['sensor.living_room'].state, 0.3),
+            'sensor.outside': generateHistory(mockHass.states['sensor.outside'].state, 1.5),
+            'sensor.humidity': generateHistory(mockHass.states['sensor.humidity'].state, 2),
             'switch.ac': generateHistory(1, 0), // binary state mock history
           }),
           callService: async (domain, service, serviceData) => {
@@ -405,7 +699,7 @@
               type: 'custom:background-graph-entities',
               title: 'Climate Controls',
               tile_style: true,
-              entities: ['sensor.bedroom', { entity: 'switch.ac', name: 'AC Toggle' }],
+              entities: ['sensor.bedroom', { entity: 'switch.ac', name: 'AC Toggle', graph_entity: 'sensor.outside' }],
             },
           },
           {
@@ -414,7 +708,10 @@
             config: {
               type: 'custom:background-graph-entities',
               title: 'Standard Controls',
-              entities: ['sensor.bedroom', { entity: 'switch.ac', name: 'AC Toggle' }],
+              entities: [
+                'sensor.bedroom',
+                { entity: 'switch.ac', name: 'AC Toggle', graph_entity: 'sensor.living_room' },
+              ],
             },
           },
           {
@@ -450,6 +747,16 @@
                     { value: 25, color: 'yellow' },
                   ],
                 },
+                {
+                  entity: 'sensor.humidity',
+                  name: 'Living Room Humidity',
+                  overwrite_graph_appearance: true,
+                  color_thresholds: [
+                    { value: 30, color: 'brown' },
+                    { value: 45, color: 'teal' },
+                    { value: 60, color: 'blue' },
+                  ],
+                },
               ],
             },
           },
@@ -481,6 +788,16 @@
               entities: [{ entity: 'sensor.bedroom', show_icon: true }, 'sensor.outside'],
             },
           },
+          {
+            name: 'Dark Mode Example',
+            description: 'The card respects standard Home Assistant theme variables.',
+            theme: 'dark',
+            config: {
+              type: 'custom:background-graph-entities',
+              title: 'Night Mode',
+              entities: ['sensor.bedroom', 'sensor.outside'],
+            },
+          },
         ];
 
         const grid = document.getElementById('demo-grid');
@@ -493,6 +810,10 @@
           // Card Column
           const cardContainer = document.createElement('div');
           cardContainer.className = 'demo-card-container';
+          if (item.theme === 'dark') {
+            cardContainer.classList.add('dark-mode');
+            cardContainer.classList.add('dark-mode-bg');
+          }
 
           const title = document.createElement('div');
           title.className = 'demo-title';
@@ -529,6 +850,59 @@
           wrapper.appendChild(cardContainer);
           wrapper.appendChild(configContainer);
           grid.appendChild(wrapper);
+        });
+
+        // --- Setup Live Playground ---
+        const liveEditor = document.getElementById('live-editor');
+        const livePreview = document.getElementById('live-preview');
+
+        let playgroundConfig = {
+          type: 'custom:background-graph-entities',
+          title: 'Playground Preview',
+          entities: ['sensor.bedroom'],
+          line_color: '#E01A4F',
+        };
+
+        const storedConfig = localStorage.getItem('bge_playground_config');
+        if (storedConfig) {
+          try {
+            playgroundConfig = JSON.parse(storedConfig);
+          } catch (e) {
+            console.error('Failed to parse playground config from local storage', e);
+          }
+        }
+
+        livePreview.hass = { ...mockHass };
+        livePreview.setConfig(playgroundConfig);
+
+        liveEditor.hass = { ...mockHass };
+        liveEditor.setConfig(playgroundConfig);
+        document.getElementById('live-yaml').textContent = JSON.stringify(playgroundConfig, null, 2);
+
+        let previousConfig = JSON.parse(JSON.stringify(playgroundConfig));
+
+        liveEditor.addEventListener('config-changed', (e) => {
+          const newConfig = e.detail.config;
+
+          // Block entity removal
+          if (newConfig.entities.length < previousConfig.entities.length) {
+            showToast('Removing entities is disabled in the demo to keep the layout intact.');
+            liveEditor.setConfig(previousConfig);
+            return;
+          }
+
+          // Warn about update interval / hours
+          if (newConfig.update_interval !== previousConfig.update_interval) {
+            showToast('Note: The update interval has no visual effect in this static demo.');
+          }
+          if (newConfig.hours_to_show !== previousConfig.hours_to_show) {
+            showToast("Note: The 'hours to show' setting has no visual effect in this static demo.");
+          }
+
+          previousConfig = JSON.parse(JSON.stringify(newConfig));
+          livePreview.setConfig(newConfig);
+          localStorage.setItem('bge_playground_config', JSON.stringify(newConfig));
+          document.getElementById('live-yaml').textContent = JSON.stringify(newConfig, null, 2);
         });
       };
 
