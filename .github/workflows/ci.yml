@@ -17,7 +17,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -32,3 +32,11 @@ jobs:
 
       - name: Run E2E Tests
         run: npm run test:e2e
+
+      - name: Upload E2E Screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screenshots
+          path: test/e2e/screenshots/
+          retention-days: 7
