@@ -14,6 +14,7 @@ import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
 import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
+import { downsampleHistory, MS_IN_S, S_IN_MIN } from './utils.js';
 
 // Default configuration values
 const DEFAULT_HOURS_TO_SHOW = 24;
@@ -32,10 +33,13 @@ const ELEMENT_NAME = 'background-graph-entities';
 const EDITOR_ELEMENT_NAME = `${ELEMENT_NAME}-editor`;
 const UNAVAILABLE_ICON = 'mdi:alert-circle-outline';
 const UNAVAILABLE_TEXT = 'Unavailable';
-const MS_IN_S = 1000;
-const S_IN_MIN = 60;
-const MIN_IN_H = 60;
-const MS_IN_H = MIN_IN_H * S_IN_MIN * MS_IN_S;
+
+const CURVE_FACTORIES = {
+  linear: curveLinear,
+  step: curveStep,
+  spline: curveBasis,
+  natural: curveNatural,
+};
 
 declare global {
   interface Window {
@@ -101,6 +105,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       clearInterval(this._timerId);
       this._timerId = undefined;
     }
+    this._renderRetryMap.clear();
   }
 
   private _setupUpdateInterval(): void {
@@ -149,15 +154,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   private _getCurveFactory(): CurveFactory {
-    const curveFactories = {
-      linear: curveLinear,
-      step: curveStep,
-      spline: curveBasis,
-      natural: curveNatural,
-    };
     const curveType = this._config?.curve || DEFAULT_CURVE;
     // Fallback to spline (curveBasis) if an invalid curve type is provided from the config.
-    return curveFactories[curveType] ?? curveFactories.spline;
+    return CURVE_FACTORIES[curveType as keyof typeof CURVE_FACTORIES] ?? CURVE_FACTORIES.spline;
   }
 
   private _renderAllGraphs(): void {
@@ -304,9 +303,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const unit = stateObj.attributes.unit_of_measurement ?? '';
     const stateNum = parseFloat(stateObj.state);
     let displayValue: string;
-    const hasToggle = stateObj.state === 'on' || stateObj.state === 'off';
+    const isBooleanState = stateObj.state === 'on' || stateObj.state === 'off';
+    const domain = entityConfig.entity.split('.')[0];
+    const isToggleable = isBooleanState && !['binary_sensor', 'sensor', 'update'].includes(domain);
     const isTileStyle = this._config.tile_style === true;
-    const isActive = hasToggle && stateObj.state === 'on';
+    const isActive = isBooleanState && stateObj.state === 'on';
     const iconColor = entityConfig.icon_color;
     const showGraphState = entityConfig.show_graph_entity_state ?? false;
     const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
@@ -368,18 +369,18 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           ${showIcon
             ? html`
                 <div
-                  class="icon-container ${hasToggle ? (isActive ? 'active' : 'inactive') : ''}"
-                  role=${hasToggle ? 'button' : 'img'}
-                  aria-label=${hasToggle ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
-                  aria-pressed=${hasToggle ? isActive : 'false'}
-                  tabindex=${hasToggle ? '0' : '-1'}
+                  class="icon-container ${isBooleanState ? (isActive ? 'active' : 'inactive') : ''}"
+                  role=${isToggleable ? 'button' : 'img'}
+                  aria-label=${isToggleable ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
+                  aria-pressed=${isToggleable ? isActive : 'false'}
+                  tabindex=${isToggleable ? '0' : '-1'}
                   @click=${(e: Event) => {
-                    if (hasToggle) {
+                    if (isToggleable) {
                       e.stopPropagation();
                       this._toggleEntity(entityConfig.entity);
                     }
                   }}
-                  @keydown=${hasToggle ? handleKeyboardToggle : null}
+                  @keydown=${isToggleable ? handleKeyboardToggle : null}
                 >
                   ${entityConfig.icon
                     ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
@@ -422,12 +423,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           : ''}
         <div class="entity-name">
           ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
-          ${hasToggle && !isTileStyle && secondaryDisplayValue
+          ${isToggleable && !isTileStyle && secondaryDisplayValue
             ? html`<span class="secondary-value-inline">${secondaryDisplayValue}</span>`
             : ''}
         </div>
         <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
-        ${hasToggle && !isTileStyle
+        ${isToggleable && !isTileStyle
           ? html`
               <div class="entity-value entity-with-toggle">
                 <ha-switch
@@ -442,7 +443,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             `
           : html`<div class="entity-value">
               <span class="primary-value">${displayValue}</span>
-              ${!hasToggle && secondaryDisplayValue
+              ${!isToggleable && secondaryDisplayValue
                 ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
                 : ''}
             </div>`}
@@ -628,77 +629,6 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     );
   }
 
-  protected _downsampleHistory(
-    states: { timestamp: Date; value: number }[],
-    hours: number,
-    pointsPerHour: number,
-  ): { timestamp: Date; value: number }[] {
-    if (pointsPerHour <= 0 || states.length === 0) {
-      return states; // Return raw states if downsampling is disabled or no data
-    }
-
-    // Create a combined list of states to calculate durations between them.
-    // The last "state" is a virtual point at the current time to cap the duration of the last real state.
-    const statesWithEndpoints = [...states, { timestamp: new Date(), value: states[states.length - 1]?.value ?? 0 }];
-
-    const now = new Date();
-    const startTime = new Date(now.getTime() - hours * MS_IN_H);
-    const interval = MS_IN_H / pointsPerHour;
-    const numBuckets = Math.ceil((now.getTime() - startTime.getTime()) / interval);
-
-    const downsampled: { timestamp: Date; value: number }[] = [];
-    // The first state is guaranteed by `include_start_time_state: true` to be the value at the start of the window.
-    let lastValue = states.length > 0 ? states[0].value : 0;
-
-    for (let i = 0; i < numBuckets; i++) {
-      const bucketTimestamp = new Date(startTime.getTime() + (i + 1) * interval);
-      let valueForBucket: number;
-
-      const bucketStartTime = startTime.getTime() + i * interval;
-      const bucketEndTime = bucketStartTime + interval;
-      let weightedSum = 0;
-      let totalDurationInBucket = 0;
-
-      // Iterate through all state changes to calculate their weighted contribution to this bucket.
-      for (let k = 0; k < statesWithEndpoints.length - 1; k++) {
-        const currentState = statesWithEndpoints[k];
-        const nextState = statesWithEndpoints[k + 1];
-
-        // Determine the portion of the state's duration that falls within the current bucket.
-        const start = Math.max(currentState.timestamp.getTime(), bucketStartTime);
-        const end = Math.min(nextState.timestamp.getTime(), bucketEndTime);
-
-        if (start < end) {
-          const duration = end - start;
-          weightedSum += currentState.value * duration;
-          totalDurationInBucket += duration;
-        }
-      }
-
-      if (totalDurationInBucket > 0) {
-        valueForBucket = weightedSum / totalDurationInBucket;
-        // Find the last actual value at or before the end of this bucket to carry forward.
-        lastValue = states.filter((s) => s.timestamp.getTime() <= bucketEndTime).pop()?.value ?? lastValue;
-      } else {
-        // If the bucket is empty, use the last known value.
-        valueForBucket = lastValue;
-      }
-
-      downsampled.push({
-        // Use the end of the bucket interval as the timestamp
-        timestamp: bucketTimestamp,
-        value: valueForBucket,
-      });
-    }
-
-    // Add a point at the very beginning to anchor the graph.
-    if (states.length > 0) {
-      downsampled.unshift({ timestamp: startTime, value: states[0].value });
-    }
-
-    return downsampled;
-  }
-
   private async _fetchHistory(
     entityId: string,
     mainEntityIdForLogging?: string,
@@ -738,7 +668,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           return { timestamp: new Date(s.lu * MS_IN_S), value };
         })
         .filter((s) => !isNaN(s.value));
-      return this._downsampleHistory(finalStates, hoursToShow, pointsPerHour);
+      return downsampleHistory(finalStates, hoursToShow, pointsPerHour);
     } catch (err) {
       console.error(`Error fetching history for ${mainEntityIdForLogging || entityId} (using ${entityId}):`, err);
       return null;

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock, beforeAll } from 'vitest';
 import { HomeAssistant, BackgroundGraphEntitiesConfig } from '../src/types';
 import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../src/background-graph-entities';
+import { downsampleHistory } from '../src/utils';
 
 // Mock console.info before the module is imported to prevent version logging.
 vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -674,17 +675,7 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
-  describe('Downsampling Logic (_downsampleHistory)', () => {
-    // Define a type that exposes the protected method for testing purposes.
-    type TestableBackgroundGraphEntities = BackgroundGraphEntitiesType & {
-      _downsampleHistory(
-        states: { timestamp: Date; value: number }[],
-        hours: number,
-        pointsPerHour: number,
-      ): { timestamp: Date; value: number }[];
-    };
-
-    let instance: TestableBackgroundGraphEntities;
+  describe('Downsampling Logic (downsampleHistory)', () => {
     const hoursToShow = 2;
     const pointsPerHour = 2;
     const mockNow = new Date('2023-01-01T12:00:00Z');
@@ -693,8 +684,6 @@ describe('BackgroundGraphEntities', () => {
     beforeEach(() => {
       vi.useFakeTimers();
       vi.setSystemTime(mockNow);
-      // The method is protected, so we cast to our test-specific type to access it.
-      instance = new BackgroundGraphEntities() as TestableBackgroundGraphEntities;
     });
 
     afterEach(() => {
@@ -706,9 +695,9 @@ describe('BackgroundGraphEntities', () => {
         { timestamp: new Date('2023-01-01T11:00:00Z'), value: 10 },
         { timestamp: new Date('2023-01-01T11:30:00Z'), value: 20 },
       ];
-      const result = instance._downsampleHistory(rawStates, hoursToShow, 0);
+      const result = downsampleHistory(rawStates, hoursToShow, 0);
       expect(result).toEqual(rawStates);
-      const resultNegative = instance._downsampleHistory(rawStates, hoursToShow, -1);
+      const resultNegative = downsampleHistory(rawStates, hoursToShow, -1);
       expect(resultNegative).toEqual(rawStates);
     });
 
@@ -725,7 +714,7 @@ describe('BackgroundGraphEntities', () => {
         { timestamp: new Date('2023-01-01T11:45:00Z'), value: 40 }, // Bucket 4 (11:30-12:00)
       ];
 
-      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
 
       expect(result).toHaveLength(5);
       expect(result[0]).toEqual({ timestamp: startTime, value: 5 });
@@ -743,7 +732,7 @@ describe('BackgroundGraphEntities', () => {
         { timestamp: new Date('2023-01-01T10:29:00Z'), value: 1000 }, // Spike for 1 minute
       ];
 
-      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
 
       // Weighted average: ((10 * 29) + (1000 * 1)) / 30 = 1290 / 30 = 43
       expect(result[1].value).toBeCloseTo(43);
@@ -761,7 +750,7 @@ describe('BackgroundGraphEntities', () => {
         { timestamp: new Date('2023-01-01T11:15:00Z'), value: 30 }, // Bucket 3 (11:00-11:30)
       ];
 
-      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
 
       expect(result).toHaveLength(5);
       // Bucket 1 has weighted average of 5 and 10
@@ -783,7 +772,7 @@ describe('BackgroundGraphEntities', () => {
         { timestamp: new Date('2023-01-01T10:15:20Z'), value: 0 },
       ];
 
-      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
 
       // Bucket 1 (10:00-10:30): Contains the spike.
       // The bucket is 30 minutes (1800 seconds) long.
@@ -797,7 +786,7 @@ describe('BackgroundGraphEntities', () => {
 
     it('should return an empty array when no history is provided', () => {
       const states: { timestamp: Date; value: number }[] = [];
-      const result = instance._downsampleHistory(states, hoursToShow, pointsPerHour);
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
       expect(result).toEqual([]);
     });
   });

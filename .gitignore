@@ -6,3 +6,8 @@ bun.lock
 yarn.lock
 
 .DS_Store
+
+# Playwright
+playwright-report/
+test-results/
+test/e2e/screenshots/

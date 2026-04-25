@@ -1,0 +1,21 @@
+FROM node:20-bookworm
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Install Playwright browsers and OS dependencies
+RUN npx playwright install --with-deps
+
+# Copy the rest of the project
+COPY . .
+
+# Run the build step to ensure dist is populated
+RUN npm run build
+
+# Default command to run tests
+CMD ["npx", "playwright", "test"]

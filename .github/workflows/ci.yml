@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: 'npm'
@@ -29,3 +29,6 @@ jobs:
           npm run check-format
           npm run test
           npm run build
+
+      - name: Run E2E Tests
+        run: npm run test:e2e

@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Background Graph Entities Demo</title>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+    <!-- Import the bundled component -->
+    <script type="module" src="/dist/background-graph-entities.js"></script>
+    <!-- MDI CSS must be in Light DOM for @font-face to load, and in Shadow DOM for classes -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
+    <style>
+      :root {
+        --primary-text-color: #212121;
+        --secondary-text-color: #727272;
+        --paper-item-icon-color: #44739e;
+        --ha-card-background: #ffffff;
+        --divider-color: #e0e0e0;
+        --primary-color: #03a9f4;
+        --state-icon-color: #44739e;
+        --state-icon-active-color: #fdd835;
+      }
+      body {
+        background-color: #e5e5e5;
+        margin: 0;
+        padding: 40px;
+        font-family: Roboto, Noto, sans-serif;
+        color: #333;
+      }
+      .page-header {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+      .page-header h1 {
+        margin: 0;
+        font-size: 2em;
+        color: #212121;
+      }
+      .page-header p {
+        color: #666;
+      }
+      .demo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(800px, 1fr));
+        gap: 40px;
+        max-width: 1600px;
+        margin: 0 auto;
+      }
+      .demo-wrapper {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        display: flex;
+        overflow: hidden;
+      }
+      .demo-card-container {
+        flex: 1;
+        padding: 30px;
+        background: #f9f9f9;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-right: 1px solid #eee;
+      }
+      .demo-config-container {
+        flex: 1;
+        background: #1e1e1e;
+        padding: 20px;
+        overflow-x: auto;
+      }
+      .demo-title {
+        font-weight: bold;
+        color: #333;
+        font-size: 1.2em;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      .card-container {
+        width: 100%;
+        max-width: 400px;
+      }
+      pre {
+        margin: 0;
+        color: #d4d4d4;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.9em;
+      }
+
+      #toast {
+        visibility: hidden;
+        min-width: 250px;
+        margin-left: -125px;
+        background-color: #333;
+        color: #fff;
+        text-align: center;
+        border-radius: 6px;
+        padding: 16px;
+        position: fixed;
+        z-index: 1000;
+        left: 50%;
+        bottom: 30px;
+        font-size: 17px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        transition:
+          opacity 0.5s,
+          bottom 0.5s;
+      }
+      #toast.show {
+        visibility: visible;
+        opacity: 1;
+        bottom: 50px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-header">
+      <h1>Background Graph Entities</h1>
+      <p>Interactive Demo & Config Explorer</p>
+    </div>
+
+    <div id="toast"></div>
+
+    <div class="demo-grid" id="demo-grid"></div>
+
+    <script>
+      function showToast(message) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = 'show';
+        setTimeout(() => {
+          toast.className = toast.className.replace('show', '');
+        }, 3000);
+      }
+
+      // Mock Home Assistant core UI components
+      class HaCard extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        set header(val) {
+          this._header = val;
+          this.render();
+        }
+        get header() {
+          return this._header;
+        }
+        connectedCallback() {
+          this.render();
+        }
+        render() {
+          this.shadowRoot.innerHTML = `
+            <style>
+              :host {
+                display: block;
+                background: var(--ha-card-background, #fff);
+                border-radius: var(--ha-card-border-radius, 12px);
+                box-shadow: 0px 2px 1px -1px rgba(0, 0, 0, 0.2), 0px 1px 1px 0px rgba(0, 0, 0, 0.14), 0px 1px 3px 0px rgba(0, 0, 0, 0.12);
+                color: var(--primary-text-color);
+              }
+              .header {
+                padding: 24px 16px 16px;
+                font-size: 24px;
+                line-height: 1.2;
+                font-weight: 400;
+              }
+            </style>
+            ${this._header ? `<div class="header">${this._header}</div>` : ''}
+            <slot></slot>
+          `;
+        }
+      }
+      customElements.define('ha-card', HaCard);
+
+      class HaStateIcon extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        set icon(val) {
+          this._icon = val;
+          this.render();
+        }
+        get icon() {
+          return this._icon;
+        }
+        set stateObj(val) {
+          this._stateObj = val;
+          this.render();
+        }
+        get stateObj() {
+          return this._stateObj;
+        }
+        set hass(val) {
+          this._hass = val;
+          this.render();
+        }
+        get hass() {
+          return this._hass;
+        }
+
+        connectedCallback() {
+          this.render();
+        }
+
+        render() {
+          let iconStr = this.getAttribute('icon') || this._icon;
+          if (!iconStr && this._hass && this._stateObj) {
+            const entityConf = this._hass.entities[this._stateObj.entity_id];
+            if (entityConf) iconStr = entityConf.icon;
+          }
+
+          let iconHtml = '';
+          if (iconStr) {
+            const iconName = iconStr.replace('mdi:', 'mdi-');
+            const isActive = this._stateObj && this._stateObj.state === 'on';
+            const color = this.style.color || (isActive ? 'var(--state-icon-active-color)' : 'var(--state-icon-color)');
+            iconHtml = `<span class="mdi ${iconName}" style="font-size: 24px; color: ${color}"></span>`;
+          }
+
+          this.shadowRoot.innerHTML = `
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+            <style>
+              :host {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 40px;
+                height: 40px;
+              }
+            </style>
+            ${iconHtml}
+          `;
+        }
+      }
+      customElements.define('ha-state-icon', HaStateIcon);
+      class HaIcon extends HaStateIcon {}
+      customElements.define('ha-icon', HaIcon);
+
+      class HaSwitch extends HTMLElement {
+        constructor() {
+          super();
+          this.attachShadow({ mode: 'open' });
+        }
+        set checked(val) {
+          this._checked = val;
+          this.render();
+        }
+        get checked() {
+          return this._checked;
+        }
+
+        connectedCallback() {
+          this.render();
+        }
+
+        toggle() {
+          this._checked = !this._checked;
+          this.render();
+          this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+        }
+
+        render() {
+          const isChecked = this._checked;
+          const bg = isChecked ? 'var(--primary-color, #03a9f4)' : '#b3b3b3';
+          const thumbBg = isChecked ? 'var(--primary-color, #03a9f4)' : '#fff';
+          const thumbTransform = isChecked ? 'transform: translateX(18px);' : 'transform: translateX(0);';
+
+          this.shadowRoot.innerHTML = `
+            <style>
+              :host {
+                display: inline-flex;
+                align-items: center;
+                cursor: pointer;
+                padding: 4px;
+              }
+              .switch-container {
+                position: relative;
+                width: 38px;
+                height: 14px;
+              }
+              .track {
+                width: 100%;
+                height: 100%;
+                background: ${bg};
+                border-radius: 7px;
+                opacity: 0.5;
+                transition: background 0.3s;
+              }
+              .thumb {
+                width: 20px;
+                height: 20px;
+                background: ${thumbBg};
+                border-radius: 50%;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+                position: absolute;
+                top: -3px;
+                left: 0;
+                transition: transform 0.3s, background 0.3s;
+                ${thumbTransform}
+              }
+            </style>
+            <div class="switch-container" onclick="this.getRootNode().host.toggle()">
+              <div class="track"></div>
+              <div class="thumb"></div>
+            </div>
+          `;
+        }
+      }
+      customElements.define('ha-switch', HaSwitch);
+
+      const setupDemos = async () => {
+        await customElements.whenDefined('background-graph-entities');
+
+        const now = Date.now() / 1000;
+        const generateHistory = (baseValue, variance, trend = 0) => {
+          const data = [];
+          for (let i = 24; i >= 0; i--) {
+            data.push({
+              s: String(baseValue + (Math.random() * variance - variance / 2) + (24 - i) * trend),
+              lu: now - i * 3600,
+            });
+          }
+          return data;
+        };
+
+        const mockHass = {
+          states: {
+            'sensor.bedroom': {
+              entity_id: 'sensor.bedroom',
+              state: '25.54',
+              attributes: { friendly_name: 'Bed room', unit_of_measurement: '°C' },
+            },
+            'sensor.living_room': {
+              entity_id: 'sensor.living_room',
+              state: '24.07',
+              attributes: { friendly_name: 'Living room', unit_of_measurement: '°C' },
+            },
+            'sensor.outside': {
+              entity_id: 'sensor.outside',
+              state: '20.91',
+              attributes: { friendly_name: 'Outside', unit_of_measurement: '°C' },
+            },
+            'sensor.humidity': {
+              entity_id: 'sensor.humidity',
+              state: '45',
+              attributes: { friendly_name: 'Humidity', unit_of_measurement: '%' },
+            },
+            'switch.ac': {
+              entity_id: 'switch.ac',
+              state: 'on',
+              attributes: { friendly_name: 'Air Conditioner' },
+            },
+          },
+          entities: {
+            'sensor.bedroom': { entity_id: 'sensor.bedroom', icon: 'mdi:bed' },
+            'sensor.living_room': { entity_id: 'sensor.living_room', icon: 'mdi:sofa' },
+            'sensor.outside': { entity_id: 'sensor.outside', icon: 'mdi:thermometer' },
+            'sensor.humidity': { entity_id: 'sensor.humidity', icon: 'mdi:water-percent' },
+            'switch.ac': { entity_id: 'switch.ac', icon: 'mdi:air-conditioner' },
+          },
+          callWS: async () => ({
+            'sensor.bedroom': generateHistory(25, 1, 0.05),
+            'sensor.living_room': generateHistory(24, 0.5, -0.02),
+            'sensor.outside': generateHistory(15, 3, 0.2),
+            'sensor.humidity': generateHistory(50, 10, -0.1),
+            'switch.ac': generateHistory(1, 0), // binary state mock history
+          }),
+          callService: async (domain, service, serviceData) => {
+            console.log(`Called service ${domain}.${service}`, serviceData);
+            showToast(`Called service: ${domain}.${service} on ${serviceData.entity_id}`);
+
+            // Mock toggle behavior
+            if (domain === 'homeassistant' && service === 'toggle') {
+              const eid = serviceData.entity_id;
+              if (mockHass.states[eid]) {
+                const currentState = mockHass.states[eid].state;
+                mockHass.states[eid] = {
+                  ...mockHass.states[eid],
+                  state: currentState === 'on' ? 'off' : currentState === 'off' ? 'on' : currentState,
+                };
+                // Simulate hass update by grabbing all cards and updating their hass
+                document.querySelectorAll('background-graph-entities').forEach((c) => {
+                  c.hass = { ...mockHass };
+                });
+              }
+            }
+          },
+        };
+
+        const configs = [
+          {
+            name: 'Default (Minimal)',
+            config: {
+              type: 'custom:background-graph-entities',
+              entities: ['sensor.bedroom', 'sensor.living_room', 'sensor.outside'],
+            },
+          },
+          {
+            name: 'Tile Style & Entity Actions',
+            description: 'Click on the Air Conditioner to test the toggle service!',
+            config: {
+              type: 'custom:background-graph-entities',
+              title: 'Climate Controls',
+              tile_style: true,
+              entities: ['sensor.bedroom', { entity: 'switch.ac', name: 'AC Toggle' }],
+            },
+          },
+          {
+            name: 'Standard Style & Entity Toggles',
+            description: 'Click the switch on the right side to test the toggle service!',
+            config: {
+              type: 'custom:background-graph-entities',
+              title: 'Standard Controls',
+              entities: ['sensor.bedroom', { entity: 'switch.ac', name: 'AC Toggle' }],
+            },
+          },
+          {
+            name: 'Advanced Appearance Settings',
+            config: {
+              type: 'custom:background-graph-entities',
+              title: 'Visual Tweaks',
+              line_width: 8,
+              line_length: 'short',
+              line_opacity: 0.8,
+              line_glow: true,
+              curve: 'step',
+              entities: ['sensor.bedroom'],
+            },
+          },
+          {
+            name: 'Color Thresholds (Global & Override)',
+            config: {
+              type: 'custom:background-graph-entities',
+              title: 'Temperature Heatmap',
+              color_thresholds: [
+                { value: 20, color: '#00f' },
+                { value: 24, color: '#0f0' },
+                { value: 28, color: '#f00' },
+              ],
+              entities: [
+                'sensor.bedroom',
+                {
+                  entity: 'sensor.living_room',
+                  overwrite_graph_appearance: true,
+                  color_thresholds: [
+                    { value: 23, color: 'purple' },
+                    { value: 25, color: 'yellow' },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            name: 'Alternative Graph Entity & Secondary Info',
+            config: {
+              type: 'custom:background-graph-entities',
+              title: 'Multi-Sensor Data',
+              entities: [
+                {
+                  entity: 'sensor.bedroom',
+                  graph_entity: 'sensor.humidity',
+                  show_graph_entity_state: true,
+                  icon: 'mdi:home-thermometer',
+                  icon_color: '#ff9800',
+                  name: 'Master Bedroom',
+                },
+              ],
+            },
+          },
+          {
+            name: 'Layout Options (Min/Max Bounds & No Icon)',
+            config: {
+              type: 'custom:background-graph-entities',
+              title: 'Compact Bounds',
+              show_icon: false,
+              graph_min: 20,
+              graph_max: 30,
+              entities: [{ entity: 'sensor.bedroom', show_icon: true }, 'sensor.outside'],
+            },
+          },
+        ];
+
+        const grid = document.getElementById('demo-grid');
+
+        configs.forEach((item) => {
+          // Wrapper
+          const wrapper = document.createElement('div');
+          wrapper.className = 'demo-wrapper';
+
+          // Card Column
+          const cardContainer = document.createElement('div');
+          cardContainer.className = 'demo-card-container';
+
+          const title = document.createElement('div');
+          title.className = 'demo-title';
+          title.textContent = item.name;
+          cardContainer.appendChild(title);
+
+          if (item.description) {
+            const desc = document.createElement('p');
+            desc.style.color = '#666';
+            desc.style.marginTop = '-10px';
+            desc.style.marginBottom = '20px';
+            desc.style.fontSize = '0.9em';
+            desc.textContent = item.description;
+            cardContainer.appendChild(desc);
+          }
+
+          const cardSlot = document.createElement('div');
+          cardSlot.className = 'card-container';
+
+          const card = document.createElement('background-graph-entities');
+          card.hass = { ...mockHass }; // Copy so updates trigger re-renders
+          card.setConfig(item.config);
+          cardSlot.appendChild(card);
+          cardContainer.appendChild(cardSlot);
+
+          // Config Column
+          const configContainer = document.createElement('div');
+          configContainer.className = 'demo-config-container';
+
+          const pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(item.config, null, 2);
+          configContainer.appendChild(pre);
+
+          wrapper.appendChild(cardContainer);
+          wrapper.appendChild(configContainer);
+          grid.appendChild(wrapper);
+        });
+      };
+
+      setupDemos();
+    </script>
+  </body>
+</html>

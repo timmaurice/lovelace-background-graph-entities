@@ -6,5 +6,6 @@ export default defineConfig({
     globals: true,
     setupFiles: './test/setup.ts',
     alias: { '\\.scss$': './test/styleMock.ts' },
+    exclude: ['**/node_modules/**', '**/dist/**', '**/test/e2e/**'],
   },
 });

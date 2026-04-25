@@ -36,7 +36,7 @@ The `background-graph-entities` custom component for Home Assistant displays a l
 - **User-Friendly:**
   - **Clickable Entities:** Tap any entity to open its "More Info" dialog.
   - **Smart Formatting:** Automatically formats time-based sensors (e.g., travel time) into a human-readable format.
-  - **Interactive Toggles:** Entities that can be turned on or off (like switches and lights) will display an interactive toggle.
+  - **Interactive Toggles:** Entities that can be turned on or off (like switches and lights) will display an interactive toggle. Read-only boolean entities (like `binary_sensor` or `sensor`) will safely display their state as text instead of a toggle.
   - **Tile Style:** A compact mode that replaces the toggle with an interactive, state-aware icon and provides a cleaner layout.
   - **Separate Graph Data:** Optionally display one entity (like a switch) while graphing the history of another (like its power consumption sensor).
 - **Secondary State Display:** When using a separate `graph_entity`, you can optionally display its current state next to the main entity's state.
@@ -209,7 +209,9 @@ entities:
 ## Development
 
 <details>
-<summary>To contribute to the development, you'll need to set up a build environment.</summary>
+<summary><b>Developer Instructions (Click to expand)</b></summary>
+
+To contribute to the development, you'll need to set up a build environment.
 
 1.  **Clone the repository:**
 
@@ -232,6 +234,35 @@ entities:
     ```
 
 4.  In your Home Assistant instance, you will need to configure Lovelace to use the local development version of the card from `dist/background-graph-entities.js`.
+
+5.  **Run Unit Tests:**
+
+    ```bash
+    npm run test
+    ```
+
+6.  **Run End-to-End Tests:**
+    We use Playwright for component testing to render the card in a headless browser and verify all visual features and configurations.
+    To run the E2E tests using the isolated Docker environment (recommended):
+
+    ```bash
+    npm run test:e2e
+    ```
+
+    To run them locally on your host machine, first build the project, then run Playwright:
+
+    ```bash
+    npm run build
+    npx playwright test
+    ```
+
+7.  **Interactive Demo:**
+    You can view a fully interactive visual demo of the component featuring all layouts, overrides, and toggles without running a Home Assistant instance!
+    ```bash
+    npx serve -l 3000
+    ```
+    Then, open your browser and navigate to `http://localhost:3000/demo.html`.
+
 </details>
 
 ---

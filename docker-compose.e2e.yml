@@ -1,0 +1,14 @@
+services:
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    volumes:
+      # Mount the tests and source so we don't need to rebuild docker if we only change tests
+      - ./test/e2e:/app/test/e2e
+      - ./src:/app/src
+      - ./dist:/app/dist
+      - ./playwright-report:/app/playwright-report
+    environment:
+      - CI=1
+    command: npx playwright test
