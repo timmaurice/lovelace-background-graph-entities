@@ -16,9 +16,12 @@
   "main": "dist/background-graph-entities.js",
   "scripts": {
     "build": "rollup -c",
+    "build:watch": "rollup -c -w",
     "check-format": "prettier --check .",
     "format": "prettier . --write",
     "lint": "eslint .",
+    "dev": "npm-run-all --parallel build:watch demo",
+    "demo": "serve -l 3000",
     "test": "NODE_ENV=production vitest run",
     "test:e2e": "docker compose -f docker-compose.e2e.yml up --build --exit-code-from playwright",
     "watch": "rollup -c -w"
@@ -37,15 +40,16 @@
     "eslint-plugin-lit": "^2.2.1",
     "eslint-plugin-wc": "^3.1.0",
     "globals": "^17.5.0",
-    "jsdom": "^29.0.2",
+    "jsdom": "^29.1.0",
     "lit": "^3.3.2",
+    "npm-run-all": "^4.1.5",
     "prettier": "^3.8.3",
     "rollup": "^4.60.2",
     "rollup-plugin-lit-css": "^6.0.1",
     "sass": "^1.99.0",
     "serve": "^14.2.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.0",
+    "typescript-eslint": "^8.59.1",
     "vitest": "^4.1.5"
   },
   "dependencies": {

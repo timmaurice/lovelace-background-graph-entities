@@ -27,5 +27,13 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ['demo/**/*.js', 'test/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+      },
+    },
+  },
   prettierConfig,
 );

@@ -12,9 +12,9 @@
 The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/timmaurice/lovelace-background-graph-entities/main/image.png" alt="Card Screenshot" width="260">
-  <img src="https://raw.githubusercontent.com/timmaurice/lovelace-background-graph-entities/main/image-entity.png" alt="Entity Editor Screenshot" width="260">
-  <img src="https://raw.githubusercontent.com/timmaurice/lovelace-background-graph-entities/main/image-color-thresholds.png" alt="Color Thresholds Editor Screenshot" width="260">
+  <img src="https://raw.githubusercontent.com/timmaurice/lovelace-background-graph-entities/main/assets/image.png" alt="Card Screenshot" width="260">
+  <img src="https://raw.githubusercontent.com/timmaurice/lovelace-background-graph-entities/main/assets/image-entity.png" alt="Entity Editor Screenshot" width="260">
+  <img src="https://raw.githubusercontent.com/timmaurice/lovelace-background-graph-entities/main/assets/image-color-thresholds.png" alt="Color Thresholds Editor Screenshot" width="260">
 </p>
 
 ## Features
@@ -258,10 +258,20 @@ To contribute to the development, you'll need to set up a build environment.
 
 7.  **Interactive Demo:**
     You can view a fully interactive visual demo of the component featuring all layouts, overrides, and toggles without running a Home Assistant instance!
+
+    To start the demo server:
+
     ```bash
-    npx serve -l 3000
+    npm run demo
     ```
-    Then, open your browser and navigate to `http://localhost:3000/demo.html`.
+
+    Then, open your browser and navigate to `http://localhost:3000/demo/index.html`.
+
+    For a complete development environment (build watcher + demo server):
+
+    ```bash
+    npm run dev
+    ```
 
 </details>
 

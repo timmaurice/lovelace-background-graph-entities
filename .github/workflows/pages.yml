@@ -42,7 +42,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          # Upload entire repository (demo.html + dist/)
+          # Upload entire repository (demo/ + dist/ + assets/)
           path: '.'
 
   deploy:

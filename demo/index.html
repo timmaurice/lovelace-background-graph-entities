@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Background Graph Entities Demo</title>
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+
+    <script src="mocks.js"></script>
+
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" />
+
+    <script type="module" src="../dist/background-graph-entities.js"></script>
+  </head>
+  <body>
+    <div class="page-header">
+      <h1>Background Graph Entities</h1>
+      <p>Interactive Demo & Config Explorer</p>
+    </div>
+
+    <label class="theme-toggle-container">
+      <span>Dark Mode</span>
+      <ha-switch id="theme-toggle"></ha-switch>
+    </label>
+
+    <div id="toast"></div>
+
+    <div class="playground-header">
+      <div class="demo-title">Live Playground</div>
+      <p class="playground-description">Experiment with the card below. Changes are saved to your local storage!</p>
+      <button id="reset-config-button" class="reset-button">Reset Config</button>
+    </div>
+
+    <div class="demo-wrapper playground-wrapper" id="playground-wrapper">
+      <div class="demo-card-container playground-preview-container">
+        <div class="card-container playground-preview-sticky">
+          <background-graph-entities id="live-preview"></background-graph-entities>
+        </div>
+      </div>
+      <div class="demo-editor-container">
+        <background-graph-entities-editor
+          id="live-editor"
+          class="playground-editor-container"
+        ></background-graph-entities-editor>
+      </div>
+      <div class="demo-config-container playground-config-container">
+        <div class="code-wrapper">
+          <button id="live-copy-button" class="copy-button" aria-label="Copy to clipboard" title="Copy to clipboard">
+            <span class="mdi mdi-content-copy"></span>
+          </button>
+          <pre id="live-yaml" class="playground-yaml"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div id="demo-grid" class="demo-grid"></div>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

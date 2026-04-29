@@ -1,0 +1,365 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+
+/* Home Assistant Default Theme Variables */
+:root {
+  /* Text */
+  --primary-text-color: #212121;
+  --secondary-text-color: #727272;
+  --text-primary-color: #ffffff;
+
+  /* Backgrounds */
+  --primary-background-color: #fafafa;
+  --secondary-background-color: #e5e5e5;
+  --ha-card-background: #ffffff;
+
+  /* Colors */
+  --primary-color: #03a9f4;
+  --light-primary-color: #b3e5fc;
+  --divider-color: rgba(0, 0, 0, 0.12);
+  --outline-color: rgba(0, 0, 0, 0.12);
+
+  /* Icons */
+  --state-icon-color: #44739e;
+  --state-icon-active-color: #fdd835;
+  --paper-item-icon-color: var(--state-icon-color);
+
+  /* Layout */
+  --ha-card-border-radius: 12px;
+  --ha-card-box-shadow:
+    0px 2px 1px -1px rgba(0, 0, 0, 0.2), 0px 1px 1px 0px rgba(0, 0, 0, 0.14), 0px 1px 3px 0px rgba(0, 0, 0, 0.12);
+  --demo-wrapper-bg: #ffffff;
+}
+
+body.dark-mode-page {
+  /* Text */
+  --primary-text-color: #e1e1e1;
+  --secondary-text-color: #9e9e9e;
+  --text-primary-color: #ffffff;
+
+  /* Backgrounds */
+  --primary-background-color: #111111;
+  --secondary-background-color: #000000; /* HA often uses black or very dark grey for main bg */
+  --ha-card-background: #1c1c1c;
+
+  /* Colors */
+  --primary-color: #03a9f4;
+  --light-primary-color: #b3e5fc;
+  --divider-color: rgba(255, 255, 255, 0.12);
+  --outline-color: rgba(255, 255, 255, 0.12);
+
+  /* Icons */
+  --state-icon-color: #9e9e9e;
+  --state-icon-active-color: #fdd835;
+  --paper-item-icon-color: var(--state-icon-color);
+
+  /* Layout */
+  --ha-card-box-shadow: none;
+  --demo-wrapper-bg: #1c1c1c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--secondary-background-color);
+  margin: 0;
+  padding: 40px 20px;
+  font-family: 'Roboto', Noto, sans-serif;
+  color: var(--primary-text-color);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+  min-height: 100vh;
+}
+
+/* Header */
+.page-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--primary-text-color);
+}
+
+.page-header p {
+  color: var(--secondary-text-color);
+  font-size: 1rem;
+  margin-top: 8px;
+}
+
+/* Theme Toggle */
+.theme-toggle-container {
+  position: absolute;
+  top: 40px;
+  right: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--ha-card-background);
+  padding: 8px 16px;
+  border-radius: var(--ha-card-border-radius);
+  box-shadow: var(--ha-card-box-shadow);
+  border: 1px solid var(--outline-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  z-index: 100;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Playground Header */
+.playground-header {
+  position: relative;
+  text-align: center;
+  margin: 0 auto 20px;
+  max-width: 1000px;
+}
+
+.playground-header .demo-title {
+  margin-bottom: 8px;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.playground-description {
+  color: var(--secondary-text-color);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.reset-button {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  transition: background-color 0.2s;
+}
+
+.reset-button:hover {
+  background: rgba(3, 169, 244, 0.08); /* Primary color with opacity */
+}
+
+/* Wrappers & Containers */
+.demo-wrapper {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 60px;
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.playground-wrapper {
+  /* Inherits max-width and centering from demo-wrapper now */
+}
+
+/* Grid for examples */
+.demo-grid {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.demo-card-container,
+.demo-editor-container,
+.demo-config-container {
+  flex: 1;
+  padding: 40px 30px;
+  background: var(--ha-card-background);
+  border-radius: var(--ha-card-border-radius);
+  box-shadow: var(--ha-card-box-shadow);
+  border: 1px solid var(--outline-color);
+}
+
+/* Preview Area mimics HA background */
+.demo-card-container {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+}
+
+.demo-editor-container {
+  display: flex;
+  justify-content: center;
+  align-self: flex-start;
+}
+
+.demo-config-container {
+  flex: 1.2;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.demo-title {
+  font-weight: 500;
+  color: var(--primary-text-color);
+  font-size: 1.1rem;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.card-container {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* HA Card element inside preview */
+background-graph-entities {
+  display: block;
+}
+
+.playground-preview-sticky {
+  position: sticky;
+  top: 80px;
+}
+
+/* Pre / Code formatting */
+pre {
+  margin: 0;
+  color: var(--primary-text-color);
+  background: var(--ha-card-background);
+  border: 1px solid var(--outline-color);
+  border-radius: 8px;
+  padding: 16px;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  width: 100%;
+  max-width: 500px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.code-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+}
+
+.copy-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--secondary-text-color);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.copy-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--primary-text-color);
+}
+
+body.dark-mode-page .copy-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary-color);
+}
+
+/* Toast (mimics HA snackbar) */
+#toast {
+  visibility: hidden;
+  min-width: 288px;
+  background: #323232;
+  color: #fff;
+  text-align: left;
+  border-radius: 4px;
+  padding: 14px 16px;
+  position: fixed;
+  z-index: 1000;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(20px);
+  font-size: 0.875rem;
+  font-weight: 400;
+  box-shadow:
+    0 3px 5px -1px rgba(0, 0, 0, 0.2),
+    0 6px 10px 0 rgba(0, 0, 0, 0.14),
+    0 1px 18px 0 rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+body.dark-mode-page #toast {
+  background: #e1e1e1;
+  color: #111;
+}
+
+#toast.show {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Layout Utilities */
+.playground-editor-container,
+.playground-yaml {
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Responsiveness */
+@media (max-width: 1024px) {
+  .theme-toggle-container {
+    position: static;
+    margin: 0 auto 30px;
+    width: fit-content;
+  }
+  .reset-button {
+    position: static;
+    display: block;
+    margin: 20px auto 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .demo-wrapper {
+    flex-direction: column;
+  }
+  .demo-editor-container {
+    align-self: stretch;
+  }
+  .demo-card-container,
+  .demo-editor-container,
+  .demo-config-container {
+    width: 100%;
+    padding: 30px 20px;
+  }
+  .playground-preview-sticky {
+    position: static;
+  }
+  .playground-editor-container,
+  .playground-yaml {
+    max-width: 100%;
+  }
+}
