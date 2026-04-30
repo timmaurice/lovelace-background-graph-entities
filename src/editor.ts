@@ -461,15 +461,28 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
               </ha-formfield>
             `
           : ''}
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.auto_icon_color')}>
+          <ha-switch
+            .checked=${entityConf.auto_icon_color === true}
+            data-index=${this._editingIndex}
+            data-field="auto_icon_color"
+            @change=${this._entitySwitchChanged}
+          ></ha-switch>
+        </ha-formfield>
+
         <div
-          class="color-input-wrapper"
+          class="color-input-wrapper ${entityConf.auto_icon_color ? 'disabled' : ''}"
           data-picker-id="entity_icon_color_${this._editingIndex}"
-          @mousedown=${(e: MouseEvent) => this._toggleColorPicker(e, `entity_icon_color_${this._editingIndex}`)}
+          @mousedown=${(e: MouseEvent) =>
+            entityConf.auto_icon_color
+              ? undefined
+              : this._toggleColorPicker(e, `entity_icon_color_${this._editingIndex}`)}
         >
           <ha-textfield
             .label=${localize(this.hass, 'component.bge.editor.icon_color')}
             .value=${entityConf.icon_color ?? ''}
             .placeholder=${'var(--primary-text-color)'}
+            .disabled=${entityConf.auto_icon_color === true}
             data-index=${this._editingIndex}
             data-field="icon_color"
             @change=${this._entityAttributeChanged}

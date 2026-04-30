@@ -58,6 +58,7 @@ export interface EntityConfig {
   name?: string;
   icon?: string;
   icon_color?: string;
+  auto_icon_color?: boolean;
   graph_entity?: string;
   show_graph_entity_state?: boolean;
   overwrite_graph_appearance?: boolean;

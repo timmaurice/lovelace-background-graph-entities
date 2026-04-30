@@ -791,6 +791,145 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Auto Icon Color Feature', () => {
+    const mockNow = new Date('2023-01-01T11:30:00Z');
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should color the icon using the threshold matching the last data point', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      const historyData = [
+        { lu: startTime.getTime() / 1000, s: '0' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '60' },
+      ];
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': historyData });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#00ff00' },
+              { value: 50, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: #ff0000');
+    });
+
+    it('should fall back to icon_color when no history is available', async () => {
+      (hass.callWS as Mock).mockResolvedValue({});
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            icon_color: '#abcdef',
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: #abcdef');
+    });
+
+    it('should override explicit icon_color when data is available', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      const historyData = [
+        { lu: startTime.getTime() / 1000, s: '0' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '60' },
+      ];
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': historyData });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            icon_color: '#000000',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#00ff00' },
+              { value: 50, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: #ff0000');
+    });
+
+    it('should not apply auto color when auto_icon_color is disabled', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      const historyData = [
+        { lu: startTime.getTime() / 1000, s: '0' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '60' },
+      ];
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': historyData });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            icon_color: '#123456',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#00ff00' },
+              { value: 50, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: #123456');
+    });
+  });
+
   describe('Hide Icon Feature', () => {
     it('should show icons by default', async () => {
       element.hass = hass;
