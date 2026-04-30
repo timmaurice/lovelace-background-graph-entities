@@ -112,21 +112,22 @@ The card is fully configurable through the UI editor.
 
 Each entry in the `entities` list can be a string (the entity ID) or an object with more specific configurations.
 
-| Name                         | Type    | Default                   | Description                                                                                               |
-| ---------------------------- | ------- | ------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `entity`                     | string  | **Required**              | The ID of the entity to display.                                                                          |
-| `name`                       | string  | Entity's friendly name    | A custom name for the entity.                                                                             |
-| `icon`                       | string  | Entity's icon             | A custom icon for the entity (e.g., `mdi:thermometer`).                                                   |
-| `icon_color`                 | string  | Theme-aware               | A custom color for the icon (e.g., `orange` or `#ffaa00`). Defaults to the theme's icon color.            |
-| `graph_entity`               | string  | `entity` ID               | An optional entity ID to use for the graph's history data, instead of the main entity.                    |
-| `show_graph_entity_state`    | boolean | `false`                   | If `graph_entity` is set, set this to `true` to display its state next to the main entity's state.        |
-| `overwrite_graph_appearance` | boolean | `false`                   | Set to `true` to enable entity-specific graph settings below. Required for per-entity overrides to apply. |
-| `line_color`                 | string  | Global `line_color`       | Overrides the global `line_color` for this entity only.                                                   |
-| `line_opacity`               | number  | Global `line_opacity`     | Overrides the global `line_opacity` for this entity only.                                                 |
-| `color_thresholds`           | list    | Global `color_thresholds` | Overrides the global `color_thresholds` for this entity only.                                             |
-| `graph_min`                  | number  | Global `graph_min`        | Overrides the global `graph_min` for this entity only.                                                    |
-| `graph_max`                  | number  | Global `graph_max`        | Overrides the global `graph_max` for this entity only.                                                    |
-| `show_icon`                  | boolean | Global `show_icon`        | Overrides the global `show_icon` for this entity only.                                                    |
+| Name                         | Type    | Default                   | Description                                                                                                                                                                                                            |
+| ---------------------------- | ------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entity`                     | string  | **Required**              | The ID of the entity to display.                                                                                                                                                                                       |
+| `name`                       | string  | Entity's friendly name    | A custom name for the entity.                                                                                                                                                                                          |
+| `icon`                       | string  | Entity's icon             | A custom icon for the entity (e.g., `mdi:thermometer`).                                                                                                                                                                |
+| `icon_color`                 | string  | Theme-aware               | A custom color for the icon (e.g., `orange` or `#ffaa00`). Defaults to the theme's icon color. Ignored when `auto_icon_color` is `true` and history is available.                                                      |
+| `auto_icon_color`            | boolean | `false`                   | When `true`, the icon color follows the graph color of the most recent data point (using the same `color_thresholds` / `line_color` resolution as the graph). Falls back to `icon_color` when no history is available. |
+| `graph_entity`               | string  | `entity` ID               | An optional entity ID to use for the graph's history data, instead of the main entity.                                                                                                                                 |
+| `show_graph_entity_state`    | boolean | `false`                   | If `graph_entity` is set, set this to `true` to display its state next to the main entity's state.                                                                                                                     |
+| `overwrite_graph_appearance` | boolean | `false`                   | Set to `true` to enable entity-specific graph settings below. Required for per-entity overrides to apply.                                                                                                              |
+| `line_color`                 | string  | Global `line_color`       | Overrides the global `line_color` for this entity only.                                                                                                                                                                |
+| `line_opacity`               | number  | Global `line_opacity`     | Overrides the global `line_opacity` for this entity only.                                                                                                                                                              |
+| `color_thresholds`           | list    | Global `color_thresholds` | Overrides the global `color_thresholds` for this entity only.                                                                                                                                                          |
+| `graph_min`                  | number  | Global `graph_min`        | Overrides the global `graph_min` for this entity only.                                                                                                                                                                 |
+| `graph_max`                  | number  | Global `graph_max`        | Overrides the global `graph_max` for this entity only.                                                                                                                                                                 |
+| `show_icon`                  | boolean | Global `show_icon`        | Overrides the global `show_icon` for this entity only.                                                                                                                                                                 |
 
 ### Examples
 
@@ -188,8 +189,10 @@ entities:
     line_opacity: 0.5
 
   # This entity uses color thresholds, which creates a gradient
+  # auto_icon_color makes the icon follow the same threshold color as the most recent value
   - entity: sensor.co2_level
     name: CO2 Level
+    auto_icon_color: true
     overwrite_graph_appearance: true
     color_thresholds:
       - value: 400

@@ -126,6 +126,14 @@ pre {
   ha-textfield {
     flex-grow: 1;
   }
+
+  &.disabled {
+    opacity: 0.5;
+
+    .color-preview {
+      cursor: not-allowed;
+    }
+  }
 }
 
 .color-preview {

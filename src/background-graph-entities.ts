@@ -276,6 +276,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return lineColor ?? defaultColor;
   }
 
+  private _getAutoIconColor(entityConfig: EntityConfig): string | undefined {
+    if (!entityConfig.auto_icon_color) return undefined;
+    const graphEntityId = entityConfig.graph_entity || entityConfig.entity;
+    const history = this._history.get(graphEntityId);
+    if (!history || history.length === 0) return undefined;
+    const last = history[history.length - 1];
+    if (!Number.isFinite(last.value)) return undefined;
+    return this._getDotColor(last.value, entityConfig);
+  }
+
   public getCardSize(): number {
     return this._config?.entities.length ? this._config.entities.length + 1 : 1;
   }
@@ -308,7 +318,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const isToggleable = isBooleanState && !['binary_sensor', 'sensor', 'update'].includes(domain);
     const isTileStyle = this._config.tile_style === true;
     const isActive = isBooleanState && stateObj.state === 'on';
-    const iconColor = entityConfig.icon_color;
+    const autoIconColor = this._getAutoIconColor(entityConfig);
+    const iconColor = autoIconColor ?? entityConfig.icon_color;
     const showGraphState = entityConfig.show_graph_entity_state ?? false;
     const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
 
@@ -363,7 +374,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       return html`
         <div
           class="entity-row ${showIcon ? '' : 'no-icon'}"
-          style=${iconColor ? `--bge-icon-color: ${iconColor}` : ''}
+          style=${iconColor
+            ? `--bge-icon-color: ${iconColor};${autoIconColor ? ` --state-active-color: ${autoIconColor};` : ''}`
+            : ''}
           @click=${() => this._openEntityPopup(entityConfig.entity)}
         >
           ${showIcon
@@ -388,7 +401,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
                         class="entity-icon"
                         .hass=${this.hass}
                         .stateObj=${stateObj}
-                        .stateColor=${isTileStyle}
+                        .stateColor=${isTileStyle && !autoIconColor}
                         style=${iconStyle}
                       ></ha-state-icon>`}
                 </div>
@@ -417,7 +430,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
                 class="entity-icon"
                 .hass=${this.hass}
                 .stateObj=${stateObj}
-                .stateColor=${isTileStyle}
+                .stateColor=${isTileStyle && !autoIconColor}
                 style=${iconStyle}
               ></ha-state-icon>`
           : ''}

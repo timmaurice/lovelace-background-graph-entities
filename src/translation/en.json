@@ -30,6 +30,7 @@
     "name": "Name",
     "icon": "Icon",
     "icon_color": "Icon Color",
+    "auto_icon_color": "Auto Icon Color",
     "graph_entity": "Graph Entity (Optional)",
     "show_graph_entity_state": "Show Graph Entity State",
     "graph_entity_helper": "Override the entity used for the graph's history data.",

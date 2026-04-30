@@ -30,6 +30,7 @@
     "name": "Nom",
     "icon": "Icône",
     "icon_color": "Couleur de l'icône",
+    "auto_icon_color": "Couleur d'icône automatique",
     "graph_entity": "Entité du graphique (Optionnel)",
     "show_graph_entity_state": "Afficher l'état de l'entité du graphique",
     "graph_entity_helper": "Remplace l'entité utilisée pour les données d'historique du graphique.",

@@ -29,6 +29,7 @@
     "name": "Name",
     "icon": "Icon",
     "icon_color": "Icon-Farbe",
+    "auto_icon_color": "Automatische Icon-Farbe",
     "graph_entity": "Graph-Entität (Optional)",
     "show_graph_entity_state": "Zustand der Graph-Entität anzeigen",
     "graph_entity_helper": "Überschreibt die Entität, die für die Verlaufsdaten des Graphen verwendet wird.",
