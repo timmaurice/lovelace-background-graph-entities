@@ -43,6 +43,12 @@ class HaCard extends HTMLElement {
 if (!customElements.get('ha-card')) customElements.define('ha-card', HaCard);
 
 class HaStateIcon extends HTMLElement {
+  static get observedAttributes() {
+    return ['style', 'icon'];
+  }
+  attributeChangedCallback() {
+    this.render();
+  }
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
