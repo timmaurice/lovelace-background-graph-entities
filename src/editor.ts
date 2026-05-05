@@ -408,6 +408,32 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     const overwriteAppearance = entityConf.overwrite_graph_appearance ?? false;
     const finalIconColor = entityConf.icon_color || 'var(--primary-text-color)';
 
+    // value_source / value_label are only meaningful for numeric entities whose
+    // graph series matches the main entity — otherwise max/min would describe
+    // a different sensor than the one displayed.
+    const isBooleanState = stateObj?.state === 'on' || stateObj?.state === 'off';
+    const valueSourceAvailable =
+      !!stateObj && !isBooleanState && (!entityConf.graph_entity || entityConf.graph_entity === entityConf.entity);
+
+    const valueSourceLabel = (source: 'latest' | 'max' | 'min'): string =>
+      localize(this.hass, `component.bge.editor.value_source_${source}`);
+    const currentValueSource = entityConf.value_source ?? 'latest';
+    const currentAutoIconColorSource = entityConf.auto_icon_color_source ?? 'latest';
+
+    const updateEntitySourceField = (field: 'value_source' | 'auto_icon_color_source', value: string): void => {
+      const idx = this._editingIndex;
+      if (idx === null) return;
+      this._updateEntityOrGlobalConfig(idx, (conf) => {
+        const newConf = { ...conf } as Partial<EntityConfig>;
+        if (value === 'latest' || !value) {
+          delete newConf[field];
+        } else {
+          newConf[field] = value as 'max' | 'min';
+        }
+        return newConf;
+      });
+    };
+
     return html`
       <div class="header">
         <ha-icon-button @click=${this._goBack}><ha-icon icon="mdi:chevron-left"></ha-icon></ha-icon-button>
@@ -470,6 +496,32 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           ></ha-switch>
         </ha-formfield>
 
+        ${entityConf.auto_icon_color
+          ? html`
+              <div class="dropdown-wrapper" style="margin-top: 8px;">
+                <ha-dropdown
+                  @wa-select=${(ev: CustomEvent) =>
+                    updateEntitySourceField('auto_icon_color_source', ev.detail.item.value)}
+                >
+                  <div slot="trigger" class="dropdown-trigger">
+                    <ha-textfield
+                      readonly
+                      .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
+                      .value=${valueSourceLabel(currentAutoIconColorSource)}
+                      iconTrailing
+                      class="dropdown-textfield"
+                    >
+                      <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+                    </ha-textfield>
+                  </div>
+                  <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
+                  <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
+                  <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
+                </ha-dropdown>
+              </div>
+            `
+          : ''}
+
         <div
           class="color-input-wrapper ${entityConf.auto_icon_color ? 'disabled' : ''}"
           data-picker-id="entity_icon_color_${this._editingIndex}"
@@ -501,6 +553,40 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             ></hex-color-picker>
           </div>
         </div>
+
+        ${valueSourceAvailable
+          ? html`
+              <div class="dropdown-wrapper" style="margin-top: 8px;">
+                <ha-dropdown
+                  @wa-select=${(ev: CustomEvent) => updateEntitySourceField('value_source', ev.detail.item.value)}
+                >
+                  <div slot="trigger" class="dropdown-trigger">
+                    <ha-textfield
+                      readonly
+                      .label=${localize(this.hass, 'component.bge.editor.value_source')}
+                      .value=${valueSourceLabel(currentValueSource)}
+                      iconTrailing
+                      class="dropdown-textfield"
+                    >
+                      <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+                    </ha-textfield>
+                  </div>
+                  <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
+                  <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
+                  <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
+                </ha-dropdown>
+              </div>
+              <ha-textfield
+                .label=${localize(this.hass, 'component.bge.editor.value_label')}
+                .value=${entityConf.value_label ?? ''}
+                .helper=${localize(this.hass, 'component.bge.editor.value_label_helper')}
+                helperPersistent
+                data-index=${this._editingIndex}
+                data-field="value_label"
+                @change=${this._entityAttributeChanged}
+              ></ha-textfield>
+            `
+          : ''}
 
         <ha-formfield .label=${localize(this.hass, 'component.bge.editor.optional_overrides')}>
           <ha-switch

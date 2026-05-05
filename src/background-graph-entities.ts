@@ -276,14 +276,26 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return lineColor ?? defaultColor;
   }
 
+  private _pickHistoryValue(
+    history: { value: number }[] | undefined,
+    source: 'latest' | 'max' | 'min',
+  ): number | undefined {
+    if (!history || history.length === 0) return undefined;
+    const finite = history.map((h) => h.value).filter((v) => Number.isFinite(v));
+    if (finite.length === 0) return undefined;
+    if (source === 'max') return Math.max(...finite);
+    if (source === 'min') return Math.min(...finite);
+    return finite[finite.length - 1];
+  }
+
   private _getAutoIconColor(entityConfig: EntityConfig): string | undefined {
     if (!entityConfig.auto_icon_color) return undefined;
     const graphEntityId = entityConfig.graph_entity || entityConfig.entity;
     const history = this._history.get(graphEntityId);
-    if (!history || history.length === 0) return undefined;
-    const last = history[history.length - 1];
-    if (!Number.isFinite(last.value)) return undefined;
-    return this._getDotColor(last.value, entityConfig);
+    const source = entityConfig.auto_icon_color_source ?? 'latest';
+    const value = this._pickHistoryValue(history, source);
+    if (value === undefined) return undefined;
+    return this._getDotColor(value, entityConfig);
   }
 
   public getCardSize(): number {
@@ -351,21 +363,46 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       }
     };
 
+    // value_source / value_label only apply for numeric entities whose graph
+    // shares the same entity — otherwise max/min would be over a different series.
+    const canUseValueSource =
+      !isBooleanState && (!entityConfig.graph_entity || entityConfig.graph_entity === entityConfig.entity);
+    const valueSource = canUseValueSource ? (entityConfig.value_source ?? 'latest') : 'latest';
+    const valueLabel = canUseValueSource ? entityConfig.value_label : undefined;
+
+    let effectiveNum = stateNum;
+    let effectiveStateString = stateObj.state;
+    if (valueSource !== 'latest') {
+      const historyValue = this._pickHistoryValue(this._history.get(entityConfig.entity), valueSource);
+      if (historyValue !== undefined) {
+        effectiveNum = historyValue;
+        effectiveStateString = String(historyValue);
+      }
+    }
+
     // Special formatting for time in minutes
     if (unit.toLowerCase() === 'min') {
-      if (stateNum >= S_IN_MIN) {
-        const hours = Math.floor(stateNum / S_IN_MIN);
-        const minutes = stateNum % S_IN_MIN;
+      if (effectiveNum >= S_IN_MIN) {
+        const hours = Math.floor(effectiveNum / S_IN_MIN);
+        const minutes = effectiveNum % S_IN_MIN;
         displayValue = `${hours}h ${Math.floor(minutes)}min`;
       } else {
-        displayValue = `${Math.floor(stateNum)} ${unit}`;
+        displayValue = `${Math.floor(effectiveNum)} ${unit}`;
       }
     } else {
-      const displayPrecision = entityDisplay?.display_precision;
-      let valueToDisplay = stateObj.state;
-      // Apply display_precision if available and state is numeric
-      if (!isNaN(stateNum) && typeof displayPrecision === 'number') {
-        valueToDisplay = stateNum.toFixed(displayPrecision);
+      // Prefer the entity registry's display_precision. When that isn't set,
+      // infer the precision from the current state string so that max/min
+      // values match the formatting users already see for `latest`.
+      const inferredPrecision =
+        !isNaN(stateNum) && stateObj.state.includes('.')
+          ? stateObj.state.length - stateObj.state.indexOf('.') - 1
+          : !isNaN(stateNum)
+            ? 0
+            : undefined;
+      const displayPrecision = entityDisplay?.display_precision ?? inferredPrecision;
+      let valueToDisplay = effectiveStateString;
+      if (!isNaN(effectiveNum) && typeof displayPrecision === 'number') {
+        valueToDisplay = effectiveNum.toFixed(displayPrecision);
       }
       displayValue = [valueToDisplay, unit].filter(Boolean).join(' ');
     }
@@ -413,6 +450,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             </div>
             <div class="entity-value">
               <span class="primary-value">${displayValue}</span>
+              ${valueLabel ? html`<span class="value-label">${valueLabel}</span>` : ''}
               ${secondaryDisplayValue ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>` : ''}
             </div>
           </div>
@@ -456,6 +494,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             `
           : html`<div class="entity-value">
               <span class="primary-value">${displayValue}</span>
+              ${valueLabel ? html`<span class="value-label">${valueLabel}</span>` : ''}
               ${!isToggleable && secondaryDisplayValue
                 ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
                 : ''}

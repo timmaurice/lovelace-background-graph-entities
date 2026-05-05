@@ -59,6 +59,9 @@ export interface EntityConfig {
   icon?: string;
   icon_color?: string;
   auto_icon_color?: boolean;
+  auto_icon_color_source?: 'latest' | 'max' | 'min';
+  value_source?: 'latest' | 'max' | 'min';
+  value_label?: string;
   graph_entity?: string;
   show_graph_entity_state?: boolean;
   overwrite_graph_appearance?: boolean;
