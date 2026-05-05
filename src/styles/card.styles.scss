@@ -120,6 +120,11 @@
   @extend %secondary-value-style;
 }
 
+.value-label {
+  margin-left: 4px;
+  @extend %secondary-value-style;
+}
+
 .tile .entity-name {
   font-weight: bold;
 }

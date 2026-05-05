@@ -930,6 +930,272 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Value Source / Label Feature', () => {
+    const mockNow = new Date('2023-01-01T11:30:00Z');
+
+    // History yielding distinct latest/max/min after downsampling at 1 point/hour:
+    //   bucket 1 (09:30-10:30): start=30 for 30min then 100 for 30min → 65
+    //   bucket 2 (10:30-11:30): 100 for 30min then 10 for 30min → 55
+    // Final downsampled history: [30, 65, 55] → max 65, min 30, latest 55.
+    const buildHistory = (): { lu: number; s: string }[] => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      return [
+        { lu: startTime.getTime() / 1000, s: '30' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '100' },
+        { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '10' },
+      ];
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should display the max history value when value_source is max', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_source: 'max' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent).toContain('65');
+    });
+
+    it('should display the min history value when value_source is min', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_source: 'min' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent).toContain('30');
+    });
+
+    it('should display the value_label after the primary value', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_source: 'max', value_label: '(peak)' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const label = element.shadowRoot?.querySelector('.value-label');
+      expect(label).not.toBeNull();
+      expect(label?.textContent).toBe('(peak)');
+    });
+
+    it('should infer precision from the current state string when display_precision is unset', async () => {
+      // sensor reports one decimal; max from history should also render one decimal
+      hass.states['sensor.temp'] = {
+        entity_id: 'sensor.temp',
+        state: '20.0',
+        attributes: { friendly_name: 'Temp', unit_of_measurement: '°C' },
+      };
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      const historyData = [
+        { lu: startTime.getTime() / 1000, s: '20.0' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '23.456' },
+      ];
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.temp': historyData });
+
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.temp', value_source: 'max' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      // Inferred precision = 1 (from "20.0"); raw max ~21.7 should render with 1 decimal
+      expect(primary?.textContent).toMatch(/^\d+\.\d °C$/);
+    });
+
+    it('should fall back to current state when history is empty', async () => {
+      (hass.callWS as Mock).mockResolvedValue({});
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_source: 'max' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent).toContain('123');
+    });
+
+    it('should ignore value_source for boolean/toggleable entities', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'switch.test', value_source: 'max', value_label: '(peak)' }],
+      });
+      await element.updateComplete;
+
+      const label = element.shadowRoot?.querySelector('.value-label');
+      expect(label).toBeNull();
+    });
+
+    it('should ignore value_source when graph_entity differs from main entity', async () => {
+      hass.states['sensor.power'] = {
+        entity_id: 'sensor.power',
+        state: '7',
+        attributes: { friendly_name: 'Power', unit_of_measurement: 'W' },
+      };
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.power': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            graph_entity: 'sensor.power',
+            value_source: 'max',
+            value_label: '(peak)',
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent).toContain('123');
+      const label = element.shadowRoot?.querySelector('.value-label');
+      expect(label).toBeNull();
+    });
+  });
+
+  describe('Auto Icon Color Source Option', () => {
+    const mockNow = new Date('2023-01-01T11:30:00Z');
+
+    // Same downsampled history as above: max 65, min 30, latest 55.
+    // With thresholds {0: green, 60: red}: max=65 → red, min=30 → green, latest=55 → green.
+    const buildHistory = (): { lu: number; s: string }[] => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      return [
+        { lu: startTime.getTime() / 1000, s: '30' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '100' },
+        { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '10' },
+      ];
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should color the icon using the max-of-history threshold', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            auto_icon_color_source: 'max',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#00ff00' },
+              { value: 60, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: #ff0000');
+    });
+
+    it('should color the icon using the min-of-history threshold', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            auto_icon_color_source: 'min',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#00ff00' },
+              { value: 60, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: #00ff00');
+    });
+  });
+
   describe('Hide Icon Feature', () => {
     it('should show icons by default', async () => {
       element.hass = hass;
