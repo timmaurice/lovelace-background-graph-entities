@@ -259,17 +259,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // Use thresholds if available
     if (thresholds && thresholds.length > 0) {
       const sortedThresholds = [...thresholds].sort((a, b) => a.value - b.value);
-      // Find the last threshold that the value is greater than or equal to
-      let color = sortedThresholds[0].color; // Default to the lowest threshold color
-      for (const threshold of sortedThresholds) {
-        if (value >= threshold.value) {
-          color = threshold.color;
-        } else {
-          // Since thresholds are sorted, we can stop.
-          break;
-        }
-      }
-      return color;
+
+      const colorScale = scaleLinear<string>()
+        .domain(sortedThresholds.map((t) => t.value))
+        .range(sortedThresholds.map((t) => t.color))
+        .clamp(true);
+
+      return colorScale(value);
     }
 
     // Fallback to line color, then default.

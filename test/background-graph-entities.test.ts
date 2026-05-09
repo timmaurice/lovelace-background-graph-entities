@@ -834,7 +834,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toBe('color: #ff0000');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
     });
 
     it('should fall back to icon_color when no history is available', async () => {
@@ -892,7 +892,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toBe('color: #ff0000');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
     });
 
     it('should not apply auto color when auto_icon_color is disabled', async () => {
@@ -927,6 +927,39 @@ describe('BackgroundGraphEntities', () => {
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
       expect(icon?.getAttribute('style')).toBe('color: #123456');
+    });
+
+    it('should color the icon using global thresholds when no entity overrides are present', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      const historyData = [
+        { lu: startTime.getTime() / 1000, s: '0' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '60' },
+      ];
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': historyData });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        color_thresholds: [
+          { value: 0, color: '#00ff00' },
+          { value: 50, color: '#ff0000' },
+        ],
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
     });
   });
 
@@ -1162,7 +1195,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toBe('color: #ff0000');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
     });
 
     it('should color the icon using the min-of-history threshold', async () => {
@@ -1192,7 +1225,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toBe('color: #00ff00');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(128, 128, 0)');
     });
   });
 

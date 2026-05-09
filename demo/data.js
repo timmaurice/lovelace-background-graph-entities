@@ -141,6 +141,42 @@ export const demoConfigs = [
     },
   },
   {
+    name: 'Dynamic Sources & Labels',
+    description: 'Use different sources for values and automatic icon colors.',
+    config: {
+      type: 'custom:background-graph-entities',
+      title: 'Advanced Data Sources',
+      color_thresholds: [
+        { value: 22, color: '#03a9f4' },
+        { value: 23, color: '#4caf50' },
+        { value: 24, color: '#ff5252' },
+      ],
+      entities: [
+        {
+          entity: 'sensor.bedroom',
+          name: 'Latest Value',
+          auto_icon_color: true,
+        },
+        {
+          entity: 'sensor.bedroom',
+          name: 'Maximum Value',
+          value_label: 'Daily Max',
+          auto_icon_color: true,
+          value_source: 'max',
+          auto_icon_color_source: 'max',
+        },
+        {
+          entity: 'sensor.bedroom',
+          name: 'Minimum Value',
+          value_label: 'Daily Min',
+          auto_icon_color: true,
+          value_source: 'min',
+          auto_icon_color_source: 'min',
+        },
+      ],
+    },
+  },
+  {
     name: 'Dark Mode Example',
     description: 'The card respects standard Home Assistant theme variables.',
     theme: 'dark',

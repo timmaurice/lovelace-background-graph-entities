@@ -496,95 +496,101 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           ></ha-switch>
         </ha-formfield>
 
-        ${entityConf.auto_icon_color
-          ? html`
-              <div class="dropdown-wrapper" style="margin-top: 8px;">
-                <ha-dropdown
-                  @wa-select=${(ev: CustomEvent) =>
-                    updateEntitySourceField('auto_icon_color_source', ev.detail.item.value)}
-                >
-                  <div slot="trigger" class="dropdown-trigger">
-                    <ha-textfield
-                      readonly
-                      .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
-                      .value=${valueSourceLabel(currentAutoIconColorSource)}
-                      iconTrailing
-                      class="dropdown-textfield"
-                    >
-                      <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-                    </ha-textfield>
-                  </div>
-                  <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
-                  <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
-                  <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
-                </ha-dropdown>
-              </div>
-            `
-          : ''}
+        <div class="${entityConf.auto_icon_color ? 'side-by-side' : ''}">
+          ${entityConf.auto_icon_color
+            ? html`
+                <div class="dropdown-wrapper">
+                  <ha-dropdown
+                    .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
+                    @wa-select=${(ev: CustomEvent) =>
+                      updateEntitySourceField('auto_icon_color_source', ev.detail.item.value)}
+                  >
+                    <div slot="trigger" class="dropdown-trigger">
+                      <ha-textfield
+                        readonly
+                        .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
+                        .value=${valueSourceLabel(currentAutoIconColorSource)}
+                        iconTrailing
+                        class="dropdown-textfield"
+                      >
+                        <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+                      </ha-textfield>
+                    </div>
+                    <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
+                    <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
+                    <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
+                  </ha-dropdown>
+                </div>
+              `
+            : ''}
 
-        <div
-          class="color-input-wrapper ${entityConf.auto_icon_color ? 'disabled' : ''}"
-          data-picker-id="entity_icon_color_${this._editingIndex}"
-          @mousedown=${(e: MouseEvent) =>
-            entityConf.auto_icon_color
-              ? undefined
-              : this._toggleColorPicker(e, `entity_icon_color_${this._editingIndex}`)}
-        >
-          <ha-textfield
-            .label=${localize(this.hass, 'component.bge.editor.icon_color')}
-            .value=${entityConf.icon_color ?? ''}
-            .placeholder=${'var(--primary-text-color)'}
-            .disabled=${entityConf.auto_icon_color === true}
-            data-index=${this._editingIndex}
-            data-field="icon_color"
-            @change=${this._entityAttributeChanged}
-          ></ha-textfield>
-          <div class="color-preview" style="background-color: ${finalIconColor}"></div>
           <div
-            class="color-picker-popup"
+            class="color-input-wrapper ${entityConf.auto_icon_color ? 'disabled' : ''}"
             data-picker-id="entity_icon_color_${this._editingIndex}"
-            @mousedown=${(e: MouseEvent) => e.stopPropagation()}
+            @mousedown=${(e: MouseEvent) =>
+              entityConf.auto_icon_color
+                ? undefined
+                : this._toggleColorPicker(e, `entity_icon_color_${this._editingIndex}`)}
           >
-            <hex-color-picker
-              .color=${finalIconColor}
+            <ha-textfield
+              .label=${localize(this.hass, 'component.bge.editor.icon_color')}
+              .value=${entityConf.icon_color ?? ''}
+              .placeholder=${'var(--primary-text-color)'}
+              .disabled=${entityConf.auto_icon_color === true}
               data-index=${this._editingIndex}
               data-field="icon_color"
-              @color-changed=${this._entityAttributeChanged}
-            ></hex-color-picker>
+              @change=${this._entityAttributeChanged}
+            ></ha-textfield>
+            <div class="color-preview" style="background-color: ${finalIconColor}"></div>
+            <div
+              class="color-picker-popup"
+              data-picker-id="entity_icon_color_${this._editingIndex}"
+              @mousedown=${(e: MouseEvent) => e.stopPropagation()}
+            >
+              <hex-color-picker
+                .color=${finalIconColor}
+                data-index=${this._editingIndex}
+                data-field="icon_color"
+                @color-changed=${this._entityAttributeChanged}
+              ></hex-color-picker>
+            </div>
           </div>
         </div>
 
         ${valueSourceAvailable
           ? html`
-              <div class="dropdown-wrapper" style="margin-top: 8px;">
-                <ha-dropdown
-                  @wa-select=${(ev: CustomEvent) => updateEntitySourceField('value_source', ev.detail.item.value)}
-                >
-                  <div slot="trigger" class="dropdown-trigger">
-                    <ha-textfield
-                      readonly
-                      .label=${localize(this.hass, 'component.bge.editor.value_source')}
-                      .value=${valueSourceLabel(currentValueSource)}
-                      iconTrailing
-                      class="dropdown-textfield"
-                    >
-                      <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-                    </ha-textfield>
-                  </div>
-                  <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
-                  <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
-                  <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
-                </ha-dropdown>
+              <div class="side-by-side">
+                <div class="dropdown-wrapper">
+                  <ha-dropdown
+                    .label=${localize(this.hass, 'component.bge.editor.value_source')}
+                    @wa-select=${(ev: CustomEvent) => updateEntitySourceField('value_source', ev.detail.item.value)}
+                  >
+                    <div slot="trigger" class="dropdown-trigger">
+                      <ha-textfield
+                        readonly
+                        .label=${localize(this.hass, 'component.bge.editor.value_source')}
+                        .value=${valueSourceLabel(currentValueSource)}
+                        iconTrailing
+                        class="dropdown-textfield"
+                      >
+                        <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
+                      </ha-textfield>
+                    </div>
+                    <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
+                    <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
+                    <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
+                  </ha-dropdown>
+                </div>
+                <ha-textfield
+                  .label=${localize(this.hass, 'component.bge.editor.value_label')}
+                  .value=${entityConf.value_label ?? ''}
+                  .helper=${localize(this.hass, 'component.bge.editor.value_label_helper')}
+                  helperPersistent
+                  data-index=${this._editingIndex}
+                  data-field="value_label"
+                  @change=${this._entityAttributeChanged}
+                ></ha-textfield>
               </div>
-              <ha-textfield
-                .label=${localize(this.hass, 'component.bge.editor.value_label')}
-                .value=${entityConf.value_label ?? ''}
-                .helper=${localize(this.hass, 'component.bge.editor.value_label_helper')}
-                helperPersistent
-                data-index=${this._editingIndex}
-                data-field="value_label"
-                @change=${this._entityAttributeChanged}
-              ></ha-textfield>
             `
           : ''}
 
@@ -664,6 +670,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
         <div class="dropdown-wrapper" style="margin-top: 8px;">
           <ha-dropdown
+            .label=${localize(this.hass, 'component.bge.editor.color_mode')}
             @wa-select=${(ev: CustomEvent) => {
               const target = { value: ev.detail.item.value };
               this._handleColorModeChange({ target } as unknown as Event, index);
