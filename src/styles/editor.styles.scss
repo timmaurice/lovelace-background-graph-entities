@@ -217,15 +217,3 @@ h3 {
   pointer-events: none; /* Let the wrapper consume the click event to open the dropdown */
   width: 100%;
 }
-
-.formfield {
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-
-  span {
-    color: var(--primary-text-color);
-    font-size: 14px;
-  }
-}

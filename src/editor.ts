@@ -91,14 +91,6 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     this._activeColorPicker = null;
   }
 
-  private _handleFormfieldClick(ev: MouseEvent): void {
-    const target = ev.currentTarget as HTMLElement;
-    const haSwitch = target.querySelector('ha-switch') as HTMLElement | null;
-    if (haSwitch && ev.target !== haSwitch) {
-      haSwitch.click();
-    }
-  }
-
   private _updateEntityOrGlobalConfig(
     entityIndex: number | null,
     updater: (
@@ -476,38 +468,35 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           @value-changed=${this._entityAttributeChanged}
         ></ha-entity-picker>
 
-        <div class="formfield" @click=${this._handleFormfieldClick}>
-          <span>${localize(this.hass, 'component.bge.editor.show_icon')}</span>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
           <ha-switch
             .checked=${entityConf.show_icon !== false}
             data-index=${this._editingIndex}
             data-field="show_icon"
             @change=${this._entitySwitchChanged}
           ></ha-switch>
-        </div>
+        </ha-formfield>
 
         ${entityConf.graph_entity
           ? html`
-              <div class="formfield" @click=${this._handleFormfieldClick}>
-                <span>${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}</span>
+              <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}>
                 <ha-switch
                   .checked=${entityConf.show_graph_entity_state === true}
                   data-index=${this._editingIndex}
                   data-field="show_graph_entity_state"
                   @change=${this._entitySwitchChanged}
                 ></ha-switch>
-              </div>
+              </ha-formfield>
             `
           : ''}
-        <div class="formfield" @click=${this._handleFormfieldClick}>
-          <span>${localize(this.hass, 'component.bge.editor.auto_icon_color')}</span>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.auto_icon_color')}>
           <ha-switch
             .checked=${entityConf.auto_icon_color === true}
             data-index=${this._editingIndex}
             data-field="auto_icon_color"
             @change=${this._entitySwitchChanged}
           ></ha-switch>
-        </div>
+        </ha-formfield>
 
         <div class="${entityConf.auto_icon_color ? 'side-by-side' : ''}">
           ${entityConf.auto_icon_color
@@ -594,14 +583,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             `
           : ''}
 
-        <div class="formfield" @click=${this._handleFormfieldClick}>
-          <span>${localize(this.hass, 'component.bge.editor.optional_overrides')}</span>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.optional_overrides')}>
           <ha-switch
             .checked=${overwriteAppearance}
             data-index=${this._editingIndex}
             @change=${this._overwriteAppearanceChanged}
           ></ha-switch>
-        </div>
+        </ha-formfield>
 
         ${overwriteAppearance ? this._renderEntityGraphAppearanceEditor(this._editingIndex) : ''}
       </div>
@@ -823,22 +811,20 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.layout')}</h3>
-        <div class="formfield" @click=${this._handleFormfieldClick}>
-          <span>${localize(this.hass, 'component.bge.editor.tile_style')}</span>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.tile_style')}>
           <ha-switch
             .checked=${this._config.tile_style === true}
             .configValue=${'tile_style'}
             @change=${this._valueChanged}
           ></ha-switch>
-        </div>
-        <div class="formfield" @click=${this._handleFormfieldClick}>
-          <span>${localize(this.hass, 'component.bge.editor.show_icon')}</span>
+        </ha-formfield>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
           <ha-switch
             .checked=${this._config.show_icon !== false}
             .configValue=${'show_icon'}
             @change=${this._valueChanged}
           ></ha-switch>
-        </div>
+        </ha-formfield>
 
         <h3>${localize(this.hass, 'component.bge.editor.graph_appearance')}</h3>
         <div class="side-by-side">
@@ -892,14 +878,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           </div>
         </div>
 
-        <div class="formfield" @click=${this._handleFormfieldClick}>
-          <span>${localize(this.hass, 'component.bge.editor.line_glow')}</span>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.line_glow')}>
           <ha-switch
             .checked=${this._config.line_glow === true}
             .configValue=${'line_glow'}
             @change=${this._valueChanged}
           ></ha-switch>
-        </div>
+        </ha-formfield>
 
         ${this._renderGraphBoundsEditor(this._config, this._valueChanged)}
 
