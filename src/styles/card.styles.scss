@@ -147,7 +147,9 @@
   }
 }
 
-.graph-path {
+.graph-path,
+.graph-path-glow-outer,
+.graph-path-glow-inner {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
