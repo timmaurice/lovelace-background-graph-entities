@@ -26,7 +26,6 @@ const DEFAULT_CURVE = 'spline';
 // D3/Rendering constants
 const Y_AXIS_PADDING_FACTOR = 0.1;
 const GRAPH_DOT_RADIUS = 2;
-const LINE_GLOW_STD_DEVIATION = 2.5;
 
 // Other constants
 const ELEMENT_NAME = 'background-graph-entities';
@@ -598,23 +597,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'none');
 
-    const glowId = `bge-glow-${container.dataset.entityId}`;
-    if (this._config.line_glow) {
-      const defs = svg.append('defs');
-      const filter = defs
-        .append('filter')
-        .attr('id', glowId)
-        .attr('x', '-50%')
-        .attr('y', '-50%')
-        .attr('width', '200%')
-        .attr('height', '200%');
-
-      filter.append('feGaussianBlur').attr('stdDeviation', LINE_GLOW_STD_DEVIATION).attr('result', 'coloredBlur');
-
-      const merge = filter.append('feMerge');
-      merge.append('feMergeNode').attr('in', 'coloredBlur');
-      merge.append('feMergeNode').attr('in', 'SourceGraphic');
-    }
+    const lineWidth = this._config?.line_width || DEFAULT_LINE_WIDTH;
+    const lineOpacity =
+      entityConfig?.overwrite_graph_appearance && entityConfig.line_opacity !== undefined
+        ? entityConfig.line_opacity
+        : (this._config?.line_opacity ?? DEFAULT_LINE_OPACITY);
 
     const gradientId = `bge-gradient-${container.dataset.entityId}`;
     const strokeColor = this._setupGradient(svg, yScale, gradientId, entityConfig);
@@ -624,20 +611,36 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       .y((d) => yScale(d.value))
       .curve(this._getCurveFactory());
 
+    if (this._config.line_glow) {
+      svg
+        .append('path')
+        .datum(processedHistory)
+        .attr('class', 'graph-path-glow-outer')
+        .attr('d', lineGenerator)
+        .attr('stroke', strokeColor)
+        .attr('stroke-opacity', lineOpacity * 0.35)
+        .attr('stroke-width', lineWidth + 8)
+        .style('filter', 'blur(4px)');
+
+      svg
+        .append('path')
+        .datum(processedHistory)
+        .attr('class', 'graph-path-glow-inner')
+        .attr('d', lineGenerator)
+        .attr('stroke', strokeColor)
+        .attr('stroke-opacity', lineOpacity * 0.65)
+        .attr('stroke-width', lineWidth + 3)
+        .style('filter', 'blur(1.5px)');
+    }
+
     svg
       .append('path')
       .datum(processedHistory)
       .attr('class', 'graph-path')
       .attr('d', lineGenerator)
       .attr('stroke', strokeColor)
-      .attr(
-        'stroke-opacity',
-        entityConfig?.overwrite_graph_appearance && entityConfig.line_opacity !== undefined
-          ? entityConfig.line_opacity
-          : (this._config?.line_opacity ?? DEFAULT_LINE_OPACITY),
-      )
-      .attr('stroke-width', this._config?.line_width || DEFAULT_LINE_WIDTH)
-      .attr('filter', this._config.line_glow ? `url(#${glowId})` : null);
+      .attr('stroke-opacity', lineOpacity)
+      .attr('stroke-width', lineWidth);
 
     // The first point in history is an anchor at the start time, not a bucket.
     // We only want to show dots for the actual data buckets.

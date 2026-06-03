@@ -2,5 +2,6 @@
   "name": "Background Graph Entities",
   "content_in_root": false,
   "render_readme": true,
-  "filename": "background-graph-entities.js"
+  "filename": "background-graph-entities.js",
+  "homeassistant": "2026.3.0"
 }

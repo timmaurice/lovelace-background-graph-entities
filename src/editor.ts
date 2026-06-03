@@ -91,6 +91,14 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     this._activeColorPicker = null;
   }
 
+  private _handleFormfieldClick(ev: MouseEvent): void {
+    const target = ev.currentTarget as HTMLElement;
+    const haSwitch = target.querySelector('ha-switch') as HTMLElement | null;
+    if (haSwitch && ev.target !== haSwitch) {
+      haSwitch.click();
+    }
+  }
+
   private _updateEntityOrGlobalConfig(
     entityIndex: number | null,
     updater: (
@@ -133,7 +141,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   }
 
   private _handleColorModeChange(ev: Event, entityIndex: number | null = null): void {
-    const newMode = (ev.target as HTMLSelectElement).value;
+    const newMode = (ev as CustomEvent).detail?.value ?? (ev.target as HTMLSelectElement).value;
 
     this._updateEntityOrGlobalConfig(entityIndex, (conf) => {
       const oldMode = (conf.color_thresholds?.length ?? 0) > 0 ? 'threshold' : 'single';
@@ -165,6 +173,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
       if (target.tagName?.toLowerCase() === 'ha-switch') {
         value = target.checked;
+      } else if (target.tagName?.toLowerCase() === 'ha-select') {
+        value = (ev as CustomEvent).detail?.value ?? target.value;
       } else {
         value = target.value;
       }
@@ -440,14 +450,14 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         <span class="title">${title}</span>
       </div>
       <div class="card-config">
-        <ha-textfield
+        <ha-input
           .label=${localize(this.hass, 'component.bge.editor.name')}
           .value=${entityConf.name || ''}
           .configValue=${'name'}
           data-index=${this._editingIndex}
           data-field="name"
           @change=${this._entityAttributeChanged}
-        ></ha-textfield>
+        ></ha-input>
         <ha-icon-picker
           .hass=${this.hass}
           .label=${localize(this.hass, 'component.bge.editor.icon')}
@@ -466,60 +476,56 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           @value-changed=${this._entityAttributeChanged}
         ></ha-entity-picker>
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
+        <div class="formfield" @click=${this._handleFormfieldClick}>
+          <span>${localize(this.hass, 'component.bge.editor.show_icon')}</span>
           <ha-switch
             .checked=${entityConf.show_icon !== false}
             data-index=${this._editingIndex}
             data-field="show_icon"
             @change=${this._entitySwitchChanged}
           ></ha-switch>
-        </ha-formfield>
+        </div>
 
         ${entityConf.graph_entity
           ? html`
-              <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}>
+              <div class="formfield" @click=${this._handleFormfieldClick}>
+                <span>${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}</span>
                 <ha-switch
                   .checked=${entityConf.show_graph_entity_state === true}
                   data-index=${this._editingIndex}
                   data-field="show_graph_entity_state"
                   @change=${this._entitySwitchChanged}
                 ></ha-switch>
-              </ha-formfield>
+              </div>
             `
           : ''}
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.auto_icon_color')}>
+        <div class="formfield" @click=${this._handleFormfieldClick}>
+          <span>${localize(this.hass, 'component.bge.editor.auto_icon_color')}</span>
           <ha-switch
             .checked=${entityConf.auto_icon_color === true}
             data-index=${this._editingIndex}
             data-field="auto_icon_color"
             @change=${this._entitySwitchChanged}
           ></ha-switch>
-        </ha-formfield>
+        </div>
 
         <div class="${entityConf.auto_icon_color ? 'side-by-side' : ''}">
           ${entityConf.auto_icon_color
             ? html`
                 <div class="dropdown-wrapper">
-                  <ha-dropdown
+                  <ha-select
                     .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
-                    @wa-select=${(ev: CustomEvent) =>
-                      updateEntitySourceField('auto_icon_color_source', ev.detail.item.value)}
+                    .value=${currentAutoIconColorSource}
+                    .options=${[
+                      { value: 'latest', label: valueSourceLabel('latest') },
+                      { value: 'max', label: valueSourceLabel('max') },
+                      { value: 'min', label: valueSourceLabel('min') },
+                    ]}
+                    @selected=${(ev: Event) =>
+                      updateEntitySourceField('auto_icon_color_source', (ev as CustomEvent).detail.value)}
+                    @closed=${(ev: Event) => ev.stopPropagation()}
                   >
-                    <div slot="trigger" class="dropdown-trigger">
-                      <ha-textfield
-                        readonly
-                        .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
-                        .value=${valueSourceLabel(currentAutoIconColorSource)}
-                        iconTrailing
-                        class="dropdown-textfield"
-                      >
-                        <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-                      </ha-textfield>
-                    </div>
-                    <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
-                    <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
-                    <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
-                  </ha-dropdown>
+                  </ha-select>
                 </div>
               `
             : ''}
@@ -532,7 +538,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                 ? undefined
                 : this._toggleColorPicker(e, `entity_icon_color_${this._editingIndex}`)}
           >
-            <ha-textfield
+            <ha-input
               .label=${localize(this.hass, 'component.bge.editor.icon_color')}
               .value=${entityConf.icon_color ?? ''}
               .placeholder=${'var(--primary-text-color)'}
@@ -540,7 +546,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
               data-index=${this._editingIndex}
               data-field="icon_color"
               @change=${this._entityAttributeChanged}
-            ></ha-textfield>
+            ></ha-input>
             <div class="color-preview" style="background-color: ${finalIconColor}"></div>
             <div
               class="color-picker-popup"
@@ -561,27 +567,21 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           ? html`
               <div class="side-by-side">
                 <div class="dropdown-wrapper">
-                  <ha-dropdown
+                  <ha-select
                     .label=${localize(this.hass, 'component.bge.editor.value_source')}
-                    @wa-select=${(ev: CustomEvent) => updateEntitySourceField('value_source', ev.detail.item.value)}
+                    .value=${currentValueSource}
+                    .options=${[
+                      { value: 'latest', label: valueSourceLabel('latest') },
+                      { value: 'max', label: valueSourceLabel('max') },
+                      { value: 'min', label: valueSourceLabel('min') },
+                    ]}
+                    @selected=${(ev: Event) =>
+                      updateEntitySourceField('value_source', (ev as CustomEvent).detail.value)}
+                    @closed=${(ev: Event) => ev.stopPropagation()}
                   >
-                    <div slot="trigger" class="dropdown-trigger">
-                      <ha-textfield
-                        readonly
-                        .label=${localize(this.hass, 'component.bge.editor.value_source')}
-                        .value=${valueSourceLabel(currentValueSource)}
-                        iconTrailing
-                        class="dropdown-textfield"
-                      >
-                        <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-                      </ha-textfield>
-                    </div>
-                    <ha-dropdown-item value="latest">${valueSourceLabel('latest')}</ha-dropdown-item>
-                    <ha-dropdown-item value="max">${valueSourceLabel('max')}</ha-dropdown-item>
-                    <ha-dropdown-item value="min">${valueSourceLabel('min')}</ha-dropdown-item>
-                  </ha-dropdown>
+                  </ha-select>
                 </div>
-                <ha-textfield
+                <ha-input
                   .label=${localize(this.hass, 'component.bge.editor.value_label')}
                   .value=${entityConf.value_label ?? ''}
                   .helper=${localize(this.hass, 'component.bge.editor.value_label_helper')}
@@ -589,18 +589,19 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                   data-index=${this._editingIndex}
                   data-field="value_label"
                   @change=${this._entityAttributeChanged}
-                ></ha-textfield>
+                ></ha-input>
               </div>
             `
           : ''}
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.optional_overrides')}>
+        <div class="formfield" @click=${this._handleFormfieldClick}>
+          <span>${localize(this.hass, 'component.bge.editor.optional_overrides')}</span>
           <ha-switch
             .checked=${overwriteAppearance}
             data-index=${this._editingIndex}
             @change=${this._overwriteAppearanceChanged}
           ></ha-switch>
-        </ha-formfield>
+        </div>
 
         ${overwriteAppearance ? this._renderEntityGraphAppearanceEditor(this._editingIndex) : ''}
       </div>
@@ -614,7 +615,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   ): TemplateResult {
     return html`
       <div class="side-by-side">
-        <ha-textfield
+        <ha-input
           .label=${localize(this.hass, 'component.bge.editor.graph_min')}
           type="number"
           .value=${config.graph_min ?? ''}
@@ -622,8 +623,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           .configValue=${'graph_min'}
           data-index=${index}
           @change=${changeHandler}
-        ></ha-textfield>
-        <ha-textfield
+        ></ha-input>
+        <ha-input
           .label=${localize(this.hass, 'component.bge.editor.graph_max')}
           type="number"
           .value=${config.graph_max ?? ''}
@@ -631,7 +632,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           .configValue=${'graph_max'}
           data-index=${index}
           @change=${changeHandler}
-        ></ha-textfield>
+        ></ha-input>
       </div>
     `;
   }
@@ -669,33 +670,17 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         ${this._renderGraphBoundsEditor(entityConf, this._entityAttributeChanged, index)}
 
         <div class="dropdown-wrapper" style="margin-top: 8px;">
-          <ha-dropdown
+          <ha-select
             .label=${localize(this.hass, 'component.bge.editor.color_mode')}
-            @wa-select=${(ev: CustomEvent) => {
-              const target = { value: ev.detail.item.value };
-              this._handleColorModeChange({ target } as unknown as Event, index);
-            }}
+            .value=${colorMode}
+            .options=${[
+              { value: 'single', label: localize(this.hass, 'component.bge.editor.color_mode_single') },
+              { value: 'threshold', label: localize(this.hass, 'component.bge.editor.color_mode_threshold') },
+            ]}
+            @selected=${(ev: Event) => this._handleColorModeChange(ev, index)}
+            @closed=${(ev: Event) => ev.stopPropagation()}
           >
-            <div slot="trigger" class="dropdown-trigger">
-              <ha-textfield
-                readonly
-                .label=${localize(this.hass, 'component.bge.editor.color_mode')}
-                .value=${colorMode === 'single'
-                  ? localize(this.hass, 'component.bge.editor.color_mode_single')
-                  : localize(this.hass, 'component.bge.editor.color_mode_threshold')}
-                iconTrailing
-                class="dropdown-textfield"
-              >
-                <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-              </ha-textfield>
-            </div>
-            <ha-dropdown-item value="single"
-              >${localize(this.hass, 'component.bge.editor.color_mode_single')}</ha-dropdown-item
-            >
-            <ha-dropdown-item value="threshold"
-              >${localize(this.hass, 'component.bge.editor.color_mode_threshold')}</ha-dropdown-item
-            >
-          </ha-dropdown>
+          </ha-select>
         </div>
 
         ${colorMode === 'single'
@@ -705,14 +690,14 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                 data-picker-id="entity_line_color_${index}"
                 @mousedown=${(e: MouseEvent) => this._toggleColorPicker(e, `entity_line_color_${index}`)}
               >
-                <ha-textfield
+                <ha-input
                   .label=${localize(this.hass, 'component.bge.editor.line_color')}
                   .value=${entityConf.line_color ?? ''}
                   .placeholder=${this._config.line_color || defaultLineColor}
                   data-index=${index}
                   data-field="line_color"
                   @change=${this._entityAttributeChanged}
-                ></ha-textfield>
+                ></ha-input>
                 <div class="color-preview" style="background-color: ${finalLineColor}"></div>
                 <div
                   class="color-picker-popup"
@@ -761,25 +746,25 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                   <ha-icon icon="mdi:drag-vertical"></ha-icon>
                 </div>
                 <div class="threshold-inputs">
-                  <ha-textfield
+                  <ha-input
                     .label=${localize(this.hass, 'component.bge.editor.value')}
                     type="number"
                     .value=${String(threshold.value)}
                     data-field="value"
                     @change=${(e: Event) => this._thresholdChanged(e, index, entityIndex)}
-                  ></ha-textfield>
+                  ></ha-input>
                   <div
                     class="color-input-wrapper"
                     data-picker-id=${`entity_${entityIndex}_threshold_${index}`}
                     @mousedown=${(e: MouseEvent) =>
                       this._toggleColorPicker(e, `entity_${entityIndex}_threshold_${index}`)}
                   >
-                    <ha-textfield
+                    <ha-input
                       .label=${localize(this.hass, 'component.bge.editor.color')}
                       .value=${threshold.color}
                       data-field="color"
                       @change=${(e: Event) => this._thresholdChanged(e, index, entityIndex)}
-                    ></ha-textfield>
+                    ></ha-input>
                     <div class="color-preview" style="background-color: ${threshold.color}"></div>
                     <div
                       class="color-picker-popup"
@@ -829,125 +814,92 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
       <div class="card-config">
         <h3>${localize(this.hass, 'component.bge.editor.general')}</h3>
         <div class="side-by-side">
-          <ha-textfield
+          <ha-input
             .label=${localize(this.hass, 'component.bge.editor.title')}
             .value=${this._config.title || ''}
             .configValue=${'title'}
             @change=${this._valueChanged}
-          ></ha-textfield>
+          ></ha-input>
         </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.layout')}</h3>
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.tile_style')}>
+        <div class="formfield" @click=${this._handleFormfieldClick}>
+          <span>${localize(this.hass, 'component.bge.editor.tile_style')}</span>
           <ha-switch
             .checked=${this._config.tile_style === true}
             .configValue=${'tile_style'}
             @change=${this._valueChanged}
           ></ha-switch>
-        </ha-formfield>
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
+        </div>
+        <div class="formfield" @click=${this._handleFormfieldClick}>
+          <span>${localize(this.hass, 'component.bge.editor.show_icon')}</span>
           <ha-switch
             .checked=${this._config.show_icon !== false}
             .configValue=${'show_icon'}
             @change=${this._valueChanged}
           ></ha-switch>
-        </ha-formfield>
+        </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.graph_appearance')}</h3>
         <div class="side-by-side">
-          <ha-textfield
+          <ha-input
             .label=${localize(this.hass, 'component.bge.editor.hours_to_show')}
             type="number"
             .value=${String(this._config.hours_to_show ?? 24)}
             .configValue=${'hours_to_show'}
             @change=${this._valueChanged}
-          ></ha-textfield>
+          ></ha-input>
 
-          <ha-textfield
+          <ha-input
             .label=${localize(this.hass, 'component.bge.editor.line_width')}
             type="number"
             .value=${String(this._config.line_width ?? 3)}
             .configValue=${'line_width'}
             @change=${this._valueChanged}
-          ></ha-textfield>
+          ></ha-input>
         </div>
 
         <div class="side-by-side">
           <div class="dropdown-wrapper" style="margin-top: 8px;">
-            <ha-dropdown
-              @wa-select=${(ev: CustomEvent) => {
-                const target = { configValue: 'line_length', value: ev.detail.item.value } as unknown as EventTarget;
-                this._valueChanged({ target } as unknown as Event);
-              }}
+            <ha-select
+              .label=${localize(this.hass, 'component.bge.editor.line_length')}
+              .value=${this._config.line_length || 'long'}
+              .configValue=${'line_length'}
+              .options=${[
+                { value: 'long', label: localize(this.hass, 'component.bge.editor.line_length_long') },
+                { value: 'short', label: localize(this.hass, 'component.bge.editor.line_length_short') },
+              ]}
+              @selected=${this._valueChanged}
+              @closed=${(ev: Event) => ev.stopPropagation()}
             >
-              <div slot="trigger" class="dropdown-trigger">
-                <ha-textfield
-                  readonly
-                  .label=${localize(this.hass, 'component.bge.editor.line_length')}
-                  .value=${this._config.line_length === 'short'
-                    ? localize(this.hass, 'component.bge.editor.line_length_short')
-                    : localize(this.hass, 'component.bge.editor.line_length_long')}
-                  iconTrailing
-                  class="dropdown-textfield"
-                >
-                  <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-                </ha-textfield>
-              </div>
-              <ha-dropdown-item value="long"
-                >${localize(this.hass, 'component.bge.editor.line_length_long')}</ha-dropdown-item
-              >
-              <ha-dropdown-item value="short"
-                >${localize(this.hass, 'component.bge.editor.line_length_short')}</ha-dropdown-item
-              >
-            </ha-dropdown>
+            </ha-select>
           </div>
           <div class="dropdown-wrapper" style="margin-top: 8px;">
-            <ha-dropdown
-              @wa-select=${(ev: CustomEvent) => {
-                const target = { configValue: 'curve', value: ev.detail.item.value } as unknown as EventTarget;
-                this._valueChanged({ target } as unknown as Event);
-              }}
+            <ha-select
+              .label=${localize(this.hass, 'component.bge.editor.curve')}
+              .value=${this._config.curve || 'spline'}
+              .configValue=${'curve'}
+              .options=${[
+                { value: 'spline', label: localize(this.hass, 'component.bge.editor.curve_spline') },
+                { value: 'linear', label: localize(this.hass, 'component.bge.editor.curve_linear') },
+                { value: 'natural', label: localize(this.hass, 'component.bge.editor.curve_natural') },
+                { value: 'step', label: localize(this.hass, 'component.bge.editor.curve_step') },
+              ]}
+              @selected=${this._valueChanged}
+              @closed=${(ev: Event) => ev.stopPropagation()}
             >
-              <div slot="trigger" class="dropdown-trigger">
-                <ha-textfield
-                  readonly
-                  .label=${localize(this.hass, 'component.bge.editor.curve')}
-                  .value=${this._config.curve === 'linear'
-                    ? localize(this.hass, 'component.bge.editor.curve_linear')
-                    : this._config.curve === 'natural'
-                      ? localize(this.hass, 'component.bge.editor.curve_natural')
-                      : this._config.curve === 'step'
-                        ? localize(this.hass, 'component.bge.editor.curve_step')
-                        : localize(this.hass, 'component.bge.editor.curve_spline')}
-                  iconTrailing
-                  class="dropdown-textfield"
-                >
-                  <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-                </ha-textfield>
-              </div>
-              <ha-dropdown-item value="spline"
-                >${localize(this.hass, 'component.bge.editor.curve_spline')}</ha-dropdown-item
-              >
-              <ha-dropdown-item value="linear"
-                >${localize(this.hass, 'component.bge.editor.curve_linear')}</ha-dropdown-item
-              >
-              <ha-dropdown-item value="natural"
-                >${localize(this.hass, 'component.bge.editor.curve_natural')}</ha-dropdown-item
-              >
-              <ha-dropdown-item value="step"
-                >${localize(this.hass, 'component.bge.editor.curve_step')}</ha-dropdown-item
-              >
-            </ha-dropdown>
+            </ha-select>
           </div>
         </div>
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.line_glow')}>
+        <div class="formfield" @click=${this._handleFormfieldClick}>
+          <span>${localize(this.hass, 'component.bge.editor.line_glow')}</span>
           <ha-switch
             .checked=${this._config.line_glow === true}
             .configValue=${'line_glow'}
             @change=${this._valueChanged}
           ></ha-switch>
-        </ha-formfield>
+        </div>
 
         ${this._renderGraphBoundsEditor(this._config, this._valueChanged)}
 
@@ -969,32 +921,17 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
         <div class="side-by-side">
           <div class="dropdown-wrapper" style="margin-top: 8px;">
-            <ha-dropdown
-              @wa-select=${(ev: CustomEvent) => {
-                const target = { value: ev.detail.item.value };
-                this._handleColorModeChange({ target } as unknown as Event, null);
-              }}
+            <ha-select
+              .label=${localize(this.hass, 'component.bge.editor.color_mode')}
+              .value=${colorMode}
+              .options=${[
+                { value: 'single', label: localize(this.hass, 'component.bge.editor.color_mode_single') },
+                { value: 'threshold', label: localize(this.hass, 'component.bge.editor.color_mode_threshold') },
+              ]}
+              @selected=${(ev: Event) => this._handleColorModeChange(ev, null)}
+              @closed=${(ev: Event) => ev.stopPropagation()}
             >
-              <div slot="trigger" class="dropdown-trigger">
-                <ha-textfield
-                  readonly
-                  .label=${localize(this.hass, 'component.bge.editor.color_mode')}
-                  .value=${colorMode === 'single'
-                    ? localize(this.hass, 'component.bge.editor.color_mode_single')
-                    : localize(this.hass, 'component.bge.editor.color_mode_threshold')}
-                  iconTrailing
-                  class="dropdown-textfield"
-                >
-                  <ha-icon slot="trailingIcon" icon="mdi:menu-down"></ha-icon>
-                </ha-textfield>
-              </div>
-              <ha-dropdown-item value="single"
-                >${localize(this.hass, 'component.bge.editor.color_mode_single')}</ha-dropdown-item
-              >
-              <ha-dropdown-item value="threshold"
-                >${localize(this.hass, 'component.bge.editor.color_mode_threshold')}</ha-dropdown-item
-              >
-            </ha-dropdown>
+            </ha-select>
           </div>
         </div>
 
@@ -1005,12 +942,12 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                 data-picker-id="line_color"
                 @mousedown=${(e: MouseEvent) => this._toggleColorPicker(e, 'line_color')}
               >
-                <ha-textfield
+                <ha-input
                   .label=${localize(this.hass, 'component.bge.editor.line_color')}
                   .value=${this._config.line_color || defaultLineColor}
                   .configValue=${'line_color'}
                   @change=${this._valueChanged}
-                ></ha-textfield>
+                ></ha-input>
                 <div
                   class="color-preview"
                   style="background-color: ${this._config.line_color || defaultLineColor}"
@@ -1052,25 +989,25 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                           <ha-icon icon="mdi:drag-vertical"></ha-icon>
                         </div>
                         <div class="threshold-inputs">
-                          <ha-textfield
+                          <ha-input
                             .label=${localize(this.hass, 'component.bge.editor.value')}
                             type="number"
                             .value=${String(threshold.value)}
                             data-field="value"
                             @change=${(e: Event) => this._thresholdChanged(e, index, null)}
-                          ></ha-textfield>
+                          ></ha-input>
                           <div
                             class="color-input-wrapper"
                             data-picker-id=${`threshold_${index}`}
                             @mousedown=${(e: MouseEvent) => this._toggleColorPicker(e, `threshold_${index}`)}
                           >
-                            <ha-textfield
+                            <ha-input
                               .label=${localize(this.hass, 'component.bge.editor.color')}
                               .value=${threshold.color}
                               data-field="color"
                               data-index=${String(index)}
                               @change=${(e: Event) => this._thresholdChanged(e, index, null)}
-                            ></ha-textfield>
+                            ></ha-input>
                             <div class="color-preview" style="background-color: ${threshold.color}"></div>
                             <div
                               class="color-picker-popup"
@@ -1092,7 +1029,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                     `,
                   )}
                 </div>
-                <ha-button @click=${() => this._addThreshold(null)}>
+                <ha-button class="add-threshold-button" @click=${() => this._addThreshold(null)}>
                   ${localize(this.hass, 'component.bge.editor.add_threshold')}
                 </ha-button>
               </div>
@@ -1100,20 +1037,20 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
         <h3>${localize(this.hass, 'component.bge.editor.data_settings')}</h3>
         <div class="side-by-side">
-          <ha-textfield
+          <ha-input
             .label=${localize(this.hass, 'component.bge.editor.points_per_hour')}
             type="number"
             .value=${String(this._config.points_per_hour ?? 1)}
             .configValue=${'points_per_hour'}
             @change=${this._valueChanged}
-          ></ha-textfield>
-          <ha-textfield
+          ></ha-input>
+          <ha-input
             .label=${localize(this.hass, 'component.bge.editor.update_interval')}
             type="number"
             .value=${String(this._config.update_interval ?? 600)}
             .configValue=${'update_interval'}
             @change=${this._valueChanged}
-          ></ha-textfield>
+          ></ha-input>
         </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.entities')}</h3>

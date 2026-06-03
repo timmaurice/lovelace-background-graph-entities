@@ -139,8 +139,11 @@ test.describe('Background Graph Entities', () => {
     await expect(graphPath).toHaveAttribute('stroke-width', '5');
     await expect(graphPath).toHaveAttribute('stroke-opacity', '0.8');
 
-    // Test that the glow filter is applied
-    await expect(graphPath).toHaveAttribute('filter', 'url(#bge-glow-sensor.bedroom)');
+    // Test that the glow filter path is rendered under the main path
+    const outerGlowPath = cardElement.locator('.graph-path-glow-outer');
+    await expect(outerGlowPath).toBeAttached();
+    await expect(outerGlowPath).toHaveAttribute('stroke-width', '13');
+    await expect(outerGlowPath).toHaveAttribute('stroke-opacity', '0.28');
 
     await page.screenshot({
       path: 'test/e2e/screenshots/2_appearance.png',
@@ -199,7 +202,7 @@ test.describe('Background Graph Entities', () => {
     // Verify that a linear gradient was generated for the graph stroke
     const graphPath = cardElement.locator('.graph-path');
     const strokeAttr = await graphPath.getAttribute('stroke');
-    expect(strokeAttr).toContain('url(#bge-gradient-sensor.bedroom)');
+    expect(strokeAttr).toContain('url(#bge-gradient-sensor_bedroom)');
 
     const gradient = cardElement.locator('linearGradient');
     await expect(gradient).toBeAttached();

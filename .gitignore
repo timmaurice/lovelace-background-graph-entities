@@ -11,3 +11,8 @@ yarn.lock
 playwright-report/
 test-results/
 test/e2e/screenshots/
+dist/background-graph-entities.js.map
+
+# Home Assistant test environment
+docker-compose.ha.yml
+ha-config/

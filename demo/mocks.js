@@ -348,6 +348,68 @@ class HaDropdown extends HTMLElement {
 if (!customElements.get('ha-dropdown')) customElements.define('ha-dropdown', HaDropdown);
 if (!customElements.get('ha-dropdown-item')) customElements.define('ha-dropdown-item', class extends HTMLElement {});
 
+class HaSelect extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
+  get value() {
+    return this.shadowRoot.querySelector('select')?.value || this._value;
+  }
+  set value(val) {
+    this._value = val;
+    const select = this.shadowRoot.querySelector('select');
+    if (select) select.value = val;
+  }
+  set label(val) {
+    this._label = val;
+    this.render();
+  }
+  set configValue(val) {
+    this.dataset.configValue = val;
+  }
+  get configValue() {
+    return this.dataset.configValue;
+  }
+  set options(opts) {
+    this._options = opts;
+    this.render();
+  }
+  get options() {
+    return this._options || [];
+  }
+  connectedCallback() {
+    this.render();
+  }
+  render() {
+    const opts = this._options || [];
+    const optionsHtml = opts
+      .map((o) => `<option value="${o.value}" ${o.value === this._value ? 'selected' : ''}>${o.label}</option>`)
+      .join('');
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; font-size: 14px; }
+      </style>
+      <label style="font-size:12px; color:#666; display:block; font-family: inherit; margin-bottom: 4px;">${this._label || ''}</label>
+      <select>${optionsHtml}</select>
+    `;
+    this.shadowRoot.querySelector('select').addEventListener('change', (e) => {
+      this._value = e.target.value;
+      this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      this.dispatchEvent(new Event('value-changed', { bubbles: true, composed: true }));
+      this.dispatchEvent(
+        new CustomEvent('selected', {
+          bubbles: true,
+          composed: true,
+          detail: { value: e.target.value },
+        }),
+      );
+    });
+  }
+}
+if (!customElements.get('ha-select')) customElements.define('ha-select', HaSelect);
+
 class HaFormfield extends HTMLElement {
   constructor() {
     super();

@@ -394,15 +394,12 @@ describe('BackgroundGraphEntities', () => {
       const svg = element.shadowRoot?.querySelector('svg');
       expect(svg, 'SVG element should exist').not.toBeNull();
 
-      const filter = svg?.querySelector('filter');
-      expect(filter, 'Filter element should exist for line_glow').not.toBeNull();
-
-      const filterId = filter?.getAttribute('id');
-      expect(filterId).toBe('bge-glow-sensor.test');
-
-      const path = svg?.querySelector('path');
-      expect(path, 'Path element should exist').not.toBeNull();
-      expect(path?.getAttribute('filter')).toBe(`url(#${filterId})`);
+      const glowOuter = svg?.querySelector('.graph-path-glow-outer');
+      const glowInner = svg?.querySelector('.graph-path-glow-inner');
+      expect(glowOuter, 'Outer glow path should exist').not.toBeNull();
+      expect(glowInner, 'Inner glow path should exist').not.toBeNull();
+      expect((glowOuter as HTMLElement)?.style.filter).toContain('blur');
+      expect((glowInner as HTMLElement)?.style.filter).toContain('blur');
     });
 
     it('should not apply line_glow effect by default', async () => {
@@ -415,12 +412,10 @@ describe('BackgroundGraphEntities', () => {
       const svg = element.shadowRoot?.querySelector('svg');
       expect(svg, 'SVG element should exist').not.toBeNull();
 
-      const filter = svg?.querySelector('filter');
-      expect(filter, 'Filter element should not exist by default').toBeNull();
-
-      const path = svg?.querySelector('path');
-      expect(path, 'Path element should exist').not.toBeNull();
-      expect(path?.getAttribute('filter'), 'Path should not have filter attribute').toBeNull();
+      const glowOuter = svg?.querySelector('.graph-path-glow-outer');
+      const glowInner = svg?.querySelector('.graph-path-glow-inner');
+      expect(glowOuter, 'Outer glow path should not exist').toBeNull();
+      expect(glowInner, 'Inner glow path should not exist').toBeNull();
     });
 
     it('should render a spline curve by default', async () => {

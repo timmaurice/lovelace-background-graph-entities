@@ -7,7 +7,7 @@ import prettierConfig from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist/'],
+    ignores: ['dist/**', 'playwright-report/**', 'test-results/**', 'node_modules/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
