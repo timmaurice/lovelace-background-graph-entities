@@ -603,7 +603,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         ? entityConfig.line_opacity
         : (this._config?.line_opacity ?? DEFAULT_LINE_OPACITY);
 
-    const gradientId = `bge-gradient-${container.dataset.entityId}`;
+    const gradientId = `bge-gradient-${container.dataset.entityId?.replace('.', '_')}`;
     const strokeColor = this._setupGradient(svg, yScale, gradientId, entityConfig);
 
     const lineGenerator = d3Line<{ timestamp: Date; value: number }>()
@@ -618,7 +618,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         .attr('class', 'graph-path-glow-outer')
         .attr('d', lineGenerator)
         .attr('stroke', strokeColor)
-        .attr('stroke-opacity', lineOpacity * 0.35)
+        .attr('stroke-opacity', Number((lineOpacity * 0.35).toFixed(3)))
         .attr('stroke-width', lineWidth + 8)
         .style('filter', 'blur(4px)');
 
@@ -628,7 +628,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         .attr('class', 'graph-path-glow-inner')
         .attr('d', lineGenerator)
         .attr('stroke', strokeColor)
-        .attr('stroke-opacity', lineOpacity * 0.65)
+        .attr('stroke-opacity', Number((lineOpacity * 0.65).toFixed(3)))
         .attr('stroke-width', lineWidth + 3)
         .style('filter', 'blur(1.5px)');
     }
