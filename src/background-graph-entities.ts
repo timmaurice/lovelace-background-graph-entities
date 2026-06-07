@@ -76,6 +76,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   private _timerId?: number;
 
   private _renderRetryMap = new Map<HTMLElement, number>();
+  private _lastSortedEntityIds: string[] = [];
 
   public setConfig(config: BackgroundGraphEntitiesConfig): void {
     if (!config || !config.entities || !Array.isArray(config.entities) || config.entities.length === 0) {
@@ -145,8 +146,18 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       this._fetchAndStoreAllHistory();
     }
 
-    // Rerender graphs when history data or edit mode changes.
-    if (changedProperties.has('_history') || changedProperties.has('editMode')) {
+    const sortedEntities = this._getSortedEntities();
+    const sortedIds = sortedEntities.map((e) => e.entity);
+    const orderChanged =
+      sortedIds.length !== this._lastSortedEntityIds.length ||
+      sortedIds.some((id, idx) => id !== this._lastSortedEntityIds[idx]);
+
+    if (orderChanged) {
+      this._lastSortedEntityIds = sortedIds;
+    }
+
+    // Rerender graphs when history data, edit mode, or entity order changes.
+    if (changedProperties.has('_history') || changedProperties.has('editMode') || orderChanged) {
       // Defer rendering to the next frame to ensure the DOM is fully updated.
       requestAnimationFrame(() => this._renderAllGraphs());
     }
@@ -291,6 +302,127 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const value = this._pickHistoryValue(history, source);
     if (value === undefined) return undefined;
     return this._getDotColor(value, entityConfig);
+  }
+
+  private _getSortedEntities(): EntityConfig[] {
+    if (!this.hass || !this._config || !this._entities) {
+      return [];
+    }
+    if (!this._config.sort || !this._config.sort.method || this._config.sort.method === 'none') {
+      return this._entities;
+    }
+
+    const { method, reverse, numeric = true } = this._config.sort;
+    const sorted = [...this._entities];
+
+    // Keep track of the original indexes to maintain stable sorting for equal items.
+    const originalIndexes = new Map<EntityConfig, number>();
+    this._entities.forEach((entity, index) => originalIndexes.set(entity, index));
+
+    sorted.sort((a, b) => {
+      const stateObjA = this.hass.states[a.entity];
+      const stateObjB = this.hass.states[b.entity];
+
+      const isAvailableA = !!stateObjA && stateObjA.state !== 'unavailable' && stateObjA.state !== 'unknown';
+      const isAvailableB = !!stateObjB && stateObjB.state !== 'unavailable' && stateObjB.state !== 'unknown';
+
+      // For state and value sorting, always push unavailable entities to the bottom
+      if (method !== 'name') {
+        if (isAvailableA !== isAvailableB) {
+          return isAvailableA ? -1 : 1;
+        }
+
+        if (!isAvailableA && !isAvailableB) {
+          return (originalIndexes.get(a) ?? 0) - (originalIndexes.get(b) ?? 0);
+        }
+      }
+
+      let comparison = 0;
+
+      if (method === 'name') {
+        const nameA = a.name || stateObjA?.attributes.friendly_name || a.entity;
+        const nameB = b.name || stateObjB?.attributes.friendly_name || b.entity;
+        comparison = nameA.localeCompare(nameB, this.hass.language || 'en', {
+          sensitivity: 'base',
+          numeric: numeric,
+        });
+      } else if (method === 'state' || method === 'value') {
+        let valA: string | number;
+        let valB: string | number;
+
+        if (method === 'state') {
+          valA = stateObjA.state;
+          valB = stateObjB.state;
+        } else {
+          // method === 'value'
+          const stateNumA = parseFloat(stateObjA.state);
+          const isBooleanA = stateObjA.state === 'on' || stateObjA.state === 'off';
+          const canUseValueSourceA = !isBooleanA && (!a.graph_entity || a.graph_entity === a.entity);
+          const valueSourceA = canUseValueSourceA ? (a.value_source ?? 'latest') : 'latest';
+
+          let effectiveNumA = stateNumA;
+          if (valueSourceA !== 'latest') {
+            const historyValue = this._pickHistoryValue(this._history.get(a.entity), valueSourceA);
+            if (historyValue !== undefined) {
+              effectiveNumA = historyValue;
+            }
+          }
+
+          valA = isNaN(effectiveNumA) ? stateObjA.state : effectiveNumA;
+
+          const stateNumB = parseFloat(stateObjB.state);
+          const isBooleanB = stateObjB.state === 'on' || stateObjB.state === 'off';
+          const canUseValueSourceB = !isBooleanB && (!b.graph_entity || b.graph_entity === b.entity);
+          const valueSourceB = canUseValueSourceB ? (b.value_source ?? 'latest') : 'latest';
+
+          let effectiveNumB = stateNumB;
+          if (valueSourceB !== 'latest') {
+            const historyValue = this._pickHistoryValue(this._history.get(b.entity), valueSourceB);
+            if (historyValue !== undefined) {
+              effectiveNumB = historyValue;
+            }
+          }
+
+          valB = isNaN(effectiveNumB) ? stateObjB.state : effectiveNumB;
+        }
+
+        if (numeric) {
+          const numA = typeof valA === 'number' ? valA : parseFloat(valA);
+          const numB = typeof valB === 'number' ? valB : parseFloat(valB);
+
+          const isNumA = !isNaN(numA);
+          const isNumB = !isNaN(numB);
+
+          if (isNumA && isNumB) {
+            comparison = numA - numB;
+          } else if (isNumA !== isNumB) {
+            comparison = isNumA ? -1 : 1;
+          } else {
+            comparison = String(valA).localeCompare(String(valB), this.hass.language || 'en', {
+              sensitivity: 'base',
+              numeric: true,
+            });
+          }
+        } else {
+          comparison = String(valA).localeCompare(String(valB), this.hass.language || 'en', {
+            sensitivity: 'base',
+          });
+        }
+      }
+
+      if (reverse) {
+        comparison = -comparison;
+      }
+
+      // Maintain stable sort order for identical values
+      if (comparison === 0) {
+        return (originalIndexes.get(a) ?? 0) - (originalIndexes.get(b) ?? 0);
+      }
+
+      return comparison;
+    });
+
+    return sorted;
   }
 
   public getCardSize(): number {
@@ -731,6 +863,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       return html``;
     }
 
+    const sortedEntities = this._getSortedEntities();
+
     return html`
       <ha-card .header=${this._config.title}>
         <div
@@ -738,7 +872,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             ? 'short'
             : ''}"
         >
-          ${this._entities.map((entity) => this._renderEntityRow(entity))}
+          ${sortedEntities.map((entity) => this._renderEntityRow(entity))}
         </div>
       </ha-card>
     `;

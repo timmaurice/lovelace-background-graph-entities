@@ -6,6 +6,7 @@ import {
   BackgroundGraphEntitiesConfig,
   EntityConfig,
   ColorThreshold,
+  SortConfig,
 } from './types';
 import { localize } from './localize';
 import { fireEvent } from './utils';
@@ -20,10 +21,11 @@ if (!window.customElements.get('hex-color-picker')) {
 type EditorInternalConfig = Omit<BackgroundGraphEntitiesConfig, 'entities' | 'color_thresholds'> & {
   entities: EntityConfig[];
   color_thresholds?: ColorThreshold[];
+  sort?: SortConfig;
 };
 
 interface ValueChangedEventTarget extends HTMLElement {
-  configValue?: keyof EditorInternalConfig;
+  configValue?: keyof EditorInternalConfig | string;
   value: string | number;
   type?: string;
   checked?: boolean;
@@ -151,6 +153,54 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         delete newConf.color_thresholds;
       }
       return newConf;
+    });
+  }
+
+  private _sortValueChanged(ev: Event): void {
+    const target = ev.target as ValueChangedEventTarget;
+    const configValue = target.configValue;
+    if (!configValue || !this._config) return;
+
+    this._updateConfig((config) => {
+      const newConfig = { ...config };
+      const sort: SortConfig = { ...(newConfig.sort || {}) };
+      let value: string | number | boolean | undefined;
+
+      if (target.tagName?.toLowerCase() === 'ha-switch') {
+        value = target.checked;
+      } else if (target.tagName?.toLowerCase() === 'ha-select') {
+        value = (ev as CustomEvent).detail?.value ?? target.value;
+      } else {
+        value = target.value;
+      }
+
+      if (configValue === 'sort_method') {
+        if (value === 'none' || !value) {
+          delete sort.method;
+        } else {
+          sort.method = value as 'name' | 'state' | 'value';
+        }
+      } else if (configValue === 'sort_reverse') {
+        if (value === false || !value) {
+          delete sort.reverse;
+        } else {
+          sort.reverse = true;
+        }
+      } else if (configValue === 'sort_numeric') {
+        if (value === true || value === undefined) {
+          delete sort.numeric;
+        } else {
+          sort.numeric = false;
+        }
+      }
+
+      if (Object.keys(sort).length === 0) {
+        delete newConfig.sort;
+      } else {
+        newConfig.sort = sort;
+      }
+
+      return newConfig;
     });
   }
 
@@ -418,7 +468,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
       !!stateObj && !isBooleanState && (!entityConf.graph_entity || entityConf.graph_entity === entityConf.entity);
 
     const valueSourceLabel = (source: 'latest' | 'max' | 'min'): string =>
-      localize(this.hass, `component.bge.editor.value_source_${source}`);
+      localize(this.hass, `component.bge.editor.value_sources.${source}`);
     const currentValueSource = entityConf.value_source ?? 'latest';
     const currentAutoIconColorSource = entityConf.auto_icon_color_source ?? 'latest';
 
@@ -644,6 +694,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             <span>${Number(entityConf.line_opacity ?? this._config.line_opacity ?? 0.2).toFixed(3)}</span>
           </div>
           <ha-slider
+            size="s"
             min="0.05"
             max="0.8"
             step="0.025"
@@ -657,13 +708,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
         ${this._renderGraphBoundsEditor(entityConf, this._entityAttributeChanged, index)}
 
-        <div class="dropdown-wrapper" style="margin-top: 8px;">
+        <div class="dropdown-wrapper">
           <ha-select
             .label=${localize(this.hass, 'component.bge.editor.color_mode')}
             .value=${colorMode}
             .options=${[
-              { value: 'single', label: localize(this.hass, 'component.bge.editor.color_mode_single') },
-              { value: 'threshold', label: localize(this.hass, 'component.bge.editor.color_mode_threshold') },
+              { value: 'single', label: localize(this.hass, 'component.bge.editor.color_modes.single') },
+              { value: 'threshold', label: localize(this.hass, 'component.bge.editor.color_modes.threshold') },
             ]}
             @selected=${(ev: Event) => this._handleColorModeChange(ev, index)}
             @closed=${(ev: Event) => ev.stopPropagation()}
@@ -774,7 +825,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             `,
           )}
         </div>
-        <ha-button class="add-threshold-button" @click=${() => this._addThreshold(entityIndex)}>
+        <ha-button size="s" class="add-threshold-button" @click=${() => this._addThreshold(entityIndex)}>
           ${localize(this.hass, 'component.bge.editor.add_threshold')}
         </ha-button>
       </div>
@@ -846,30 +897,30 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         </div>
 
         <div class="side-by-side">
-          <div class="dropdown-wrapper" style="margin-top: 8px;">
+          <div class="dropdown-wrapper">
             <ha-select
               .label=${localize(this.hass, 'component.bge.editor.line_length')}
               .value=${this._config.line_length || 'long'}
               .configValue=${'line_length'}
               .options=${[
-                { value: 'long', label: localize(this.hass, 'component.bge.editor.line_length_long') },
-                { value: 'short', label: localize(this.hass, 'component.bge.editor.line_length_short') },
+                { value: 'long', label: localize(this.hass, 'component.bge.editor.line_lengths.long') },
+                { value: 'short', label: localize(this.hass, 'component.bge.editor.line_lengths.short') },
               ]}
               @selected=${this._valueChanged}
               @closed=${(ev: Event) => ev.stopPropagation()}
             >
             </ha-select>
           </div>
-          <div class="dropdown-wrapper" style="margin-top: 8px;">
+          <div class="dropdown-wrapper">
             <ha-select
               .label=${localize(this.hass, 'component.bge.editor.curve')}
               .value=${this._config.curve || 'spline'}
               .configValue=${'curve'}
               .options=${[
-                { value: 'spline', label: localize(this.hass, 'component.bge.editor.curve_spline') },
-                { value: 'linear', label: localize(this.hass, 'component.bge.editor.curve_linear') },
-                { value: 'natural', label: localize(this.hass, 'component.bge.editor.curve_natural') },
-                { value: 'step', label: localize(this.hass, 'component.bge.editor.curve_step') },
+                { value: 'spline', label: localize(this.hass, 'component.bge.editor.curves.spline') },
+                { value: 'linear', label: localize(this.hass, 'component.bge.editor.curves.linear') },
+                { value: 'natural', label: localize(this.hass, 'component.bge.editor.curves.natural') },
+                { value: 'step', label: localize(this.hass, 'component.bge.editor.curves.step') },
               ]}
               @selected=${this._valueChanged}
               @closed=${(ev: Event) => ev.stopPropagation()}
@@ -894,6 +945,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             <span>${Number(this._config.line_opacity ?? 0.2).toFixed(3)}</span>
           </div>
           <ha-slider
+            size="s"
             min="0.05"
             max="0.8"
             step="0.025"
@@ -905,13 +957,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         </div>
 
         <div class="side-by-side">
-          <div class="dropdown-wrapper" style="margin-top: 8px;">
+          <div class="dropdown-wrapper">
             <ha-select
               .label=${localize(this.hass, 'component.bge.editor.color_mode')}
               .value=${colorMode}
               .options=${[
-                { value: 'single', label: localize(this.hass, 'component.bge.editor.color_mode_single') },
-                { value: 'threshold', label: localize(this.hass, 'component.bge.editor.color_mode_threshold') },
+                { value: 'single', label: localize(this.hass, 'component.bge.editor.color_modes.single') },
+                { value: 'threshold', label: localize(this.hass, 'component.bge.editor.color_modes.threshold') },
               ]}
               @selected=${(ev: Event) => this._handleColorModeChange(ev, null)}
               @closed=${(ev: Event) => ev.stopPropagation()}
@@ -1014,11 +1066,49 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                     `,
                   )}
                 </div>
-                <ha-button class="add-threshold-button" @click=${() => this._addThreshold(null)}>
+                <ha-button size="s" class="add-threshold-button" @click=${() => this._addThreshold(null)}>
                   ${localize(this.hass, 'component.bge.editor.add_threshold')}
                 </ha-button>
               </div>
             `}
+
+        <h3>${localize(this.hass, 'component.bge.editor.sorting')}</h3>
+        <div class="side-by-side">
+          <div class="dropdown-wrapper">
+            <ha-select
+              .label=${localize(this.hass, 'component.bge.editor.sort_method')}
+              .value=${this._config.sort?.method || 'none'}
+              .configValue=${'sort_method'}
+              .options=${[
+                { value: 'none', label: localize(this.hass, 'component.bge.editor.sort_methods.none') },
+                { value: 'name', label: localize(this.hass, 'component.bge.editor.sort_methods.name') },
+                { value: 'state', label: localize(this.hass, 'component.bge.editor.sort_methods.state') },
+                { value: 'value', label: localize(this.hass, 'component.bge.editor.sort_methods.value') },
+              ]}
+              @selected=${this._sortValueChanged}
+              @closed=${(ev: Event) => ev.stopPropagation()}
+            >
+            </ha-select>
+          </div>
+          <ha-formfield .label=${localize(this.hass, 'component.bge.editor.sort_reverse')}>
+            <ha-switch
+              .checked=${this._config.sort?.reverse === true}
+              .configValue=${'sort_reverse'}
+              .disabled=${this._config.sort?.method === 'none' || !this._config.sort?.method}
+              @change=${this._sortValueChanged}
+            ></ha-switch>
+          </ha-formfield>
+        </div>
+        <div class="side-by-side margin-bottom">
+          <ha-formfield .label=${localize(this.hass, 'component.bge.editor.sort_numeric')}>
+            <ha-switch
+              .checked=${this._config.sort?.numeric !== false}
+              .configValue=${'sort_numeric'}
+              .disabled=${this._config.sort?.method === 'none' || !this._config.sort?.method}
+              @change=${this._sortValueChanged}
+            ></ha-switch>
+          </ha-formfield>
+        </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.data_settings')}</h3>
         <div class="side-by-side">
@@ -1088,7 +1178,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             `,
           )}
         </div>
-        <ha-button class="add-entity-button" @click=${this._addEntity}>
+        <ha-button size="s" class="add-entity-button" @click=${this._addEntity}>
           ${localize(this.hass, 'component.bge.editor.add_entity')}
         </ha-button>
       </div>

@@ -8,14 +8,18 @@
     "hours_to_show": "Stunden zum Anzeigen",
     "line_width": "Linienbreite",
     "line_length": "Linienlänge",
-    "line_length_long": "Lang",
-    "line_length_short": "Kurz",
+    "line_lengths": {
+      "long": "Lang",
+      "short": "Kurz"
+    },
     "line_color": "Linienfarbe",
     "line_opacity": "Linienopazität",
     "line_glow": "Leuchteffekt",
     "color_mode": "Farbmodus",
-    "color_mode_single": "Einzelfarbe",
-    "color_mode_threshold": "Schwellenwerte",
+    "color_modes": {
+      "single": "Einzelfarbe",
+      "threshold": "Schwellenwerte"
+    },
     "color_thresholds": "Farbschwellenwerte",
     "add_threshold": "Schwellenwert hinzufügen",
     "value": "Wert",
@@ -33,21 +37,35 @@
     "auto_icon_color": "Automatische Icon-Farbe",
     "auto_icon_color_source": "Quelle für automatische Icon-Farbe",
     "value_source": "Angezeigter Wert",
-    "value_source_latest": "Aktuell",
-    "value_source_max": "Maximum",
-    "value_source_min": "Minimum",
+    "value_sources": {
+      "latest": "Aktuell",
+      "max": "Maximum",
+      "min": "Minimum"
+    },
     "value_label": "Wert-Label",
     "value_label_helper": "Suffix nach dem Wert, z. B. (Spitze)",
     "graph_entity": "Graph-Entität (Optional)",
     "show_graph_entity_state": "Zustand der Graph-Entität anzeigen",
     "graph_entity_helper": "Überschreibt die Entität, die für die Verlaufsdaten des Graphen verwendet wird.",
     "curve": "Kurventyp",
-    "curve_spline": "Spline",
-    "curve_linear": "Linear",
-    "curve_step": "Stufe",
-    "curve_natural": "Natürlich",
+    "curves": {
+      "spline": "Spline",
+      "linear": "Linear",
+      "step": "Stufe",
+      "natural": "Natürlich"
+    },
     "graph_min": "Untere Graph-Grenze",
     "graph_max": "Obere Graph-Grenze",
-    "show_icon": "Icon anzeigen"
+    "show_icon": "Icon anzeigen",
+    "sorting": "Sortierung",
+    "sort_method": "Sortiermethode",
+    "sort_methods": {
+      "none": "Keine (Originale Reihenfolge)",
+      "name": "Name",
+      "state": "Zustand",
+      "value": "Angezeigter Wert"
+    },
+    "sort_reverse": "Reihenfolge umkehren",
+    "sort_numeric": "Numerische Sortierung"
   }
 }

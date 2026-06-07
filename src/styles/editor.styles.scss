@@ -17,10 +17,18 @@
 .side-by-side {
   display: flex;
   gap: 16px;
+
+  &.margin-bottom {
+    margin-bottom: 16px;
+  }
 }
 
 .side-by-side > * {
   flex: 1;
+}
+
+.dropdown-wrapper {
+  margin-top: 8px;
 }
 
 .entities-container {

@@ -1,0 +1,11 @@
+services:
+  homeassistant:
+    image: homeassistant/home-assistant:stable
+    container_name: ha-background-graph-entities-test
+    ports:
+      - '8127:8123'
+    volumes:
+      - ./dist:/config/www/background-graph-entities:ro
+      - ./ha-config:/config
+    environment:
+      - TZ=Europe/Berlin

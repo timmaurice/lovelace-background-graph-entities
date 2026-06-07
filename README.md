@@ -107,6 +107,17 @@ The card is fully configurable through the UI editor.
 | `points_per_hour`  | number  | `1`          | The number of time buckets per hour. The card calculates the median value for each bucket and fills in any gaps with the last known value to create a continuous graph. Higher values provide more detail but may impact performance. |
 | `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes).                                                                                                                                                                 |
 | `show_icon`        | boolean | `true`       | Set to `false` to hide the entity icon.                                                                                                                                                                                               |
+| `sort`             | object  | `undefined`  | Optional settings to auto-sort the entity list dynamically. See [Sorting Configuration](#sorting-configuration) below.                                                                                                                |
+
+### Sorting Configuration
+
+The `sort` configuration block allows you to automatically sort the displayed entities list:
+
+| Name      | Type    | Default | Description                                                                                                                                                                                                            |
+| --------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `method`  | string  | `none`  | The sorting method. Can be `none` (use original configuration order), `name` (sort by friendly/configured name), `state` (sort by raw state), or `value` (sort by displayed value taking `value_source` into account). |
+| `reverse` | boolean | `false` | Set to `true` to sort in descending order (e.g., highest value first).                                                                                                                                                 |
+| `numeric` | boolean | `true`  | Set to `true` to sort states or values numerically. When `false`, they are sorted alphabetically.                                                                                                                      |
 
 #### Entity Options
 
@@ -218,6 +229,24 @@ entities:
     name: Office Light
     graph_entity: sensor.office_light_power
     show_graph_entity_state: true
+```
+
+#### 4. Auto Sorting Example
+
+This example displays temperatures sorted by the hottest state at the top.
+
+```yaml
+type: custom:background-graph-entities
+title: Temperatures
+hours_to_show: 24
+sort:
+  method: state
+  numeric: true
+  reverse: true
+entities:
+  - sensor.outside_temperature
+  - sensor.living_room_temperature
+  - sensor.bedroom_temperature
 ```
 
 ## Development

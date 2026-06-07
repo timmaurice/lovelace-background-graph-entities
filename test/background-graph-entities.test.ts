@@ -1286,4 +1286,132 @@ describe('BackgroundGraphEntities', () => {
       expect(row?.querySelector('ha-icon')).toBeNull();
     });
   });
+
+  describe('Entity Sorting Feature', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      hass.states['sensor.temp_a'] = {
+        entity_id: 'sensor.temp_a',
+        state: '15.5',
+        attributes: { friendly_name: 'Z Temperature' },
+      };
+      hass.states['sensor.temp_b'] = {
+        entity_id: 'sensor.temp_b',
+        state: '35.2',
+        attributes: { friendly_name: 'A Temperature' },
+      };
+      hass.states['sensor.temp_c'] = {
+        entity_id: 'sensor.temp_c',
+        state: 'unavailable',
+        attributes: { friendly_name: 'B Temperature' },
+      };
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should sort by name ascending, regardless of availability', async () => {
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.temp_a', 'sensor.temp_b', 'sensor.temp_c'],
+        sort: { method: 'name', reverse: false },
+      });
+      await element.updateComplete;
+
+      const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      // A Temperature first, B Temperature (unavailable) second, Z Temperature third
+      expect(names).toEqual(['A Temperature', 'B Temperature', 'Z Temperature']);
+    });
+
+    it('should sort by name descending, regardless of availability', async () => {
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.temp_a', 'sensor.temp_b', 'sensor.temp_c'],
+        sort: { method: 'name', reverse: true },
+      });
+      await element.updateComplete;
+
+      const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      // Z Temperature first, B Temperature (unavailable) second, A Temperature third
+      expect(names).toEqual(['Z Temperature', 'B Temperature', 'A Temperature']);
+    });
+
+    it('should sort by numeric state ascending, with unavailable at the bottom', async () => {
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.temp_a', 'sensor.temp_b', 'sensor.temp_c'],
+        sort: { method: 'state', numeric: true, reverse: false },
+      });
+      await element.updateComplete;
+
+      const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      // 15.5 (Z Temp) first, 35.2 (A Temp) second, unavailable (B Temp) last
+      expect(names).toEqual(['Z Temperature', 'A Temperature', 'B Temperature']);
+    });
+
+    it('should sort by numeric state descending, with unavailable at the bottom', async () => {
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.temp_a', 'sensor.temp_b', 'sensor.temp_c'],
+        sort: { method: 'state', numeric: true, reverse: true },
+      });
+      await element.updateComplete;
+
+      const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      // 35.2 (A Temp) first, 15.5 (Z Temp) second, unavailable last
+      expect(names).toEqual(['A Temperature', 'Z Temperature', 'B Temperature']);
+    });
+
+    it('should sort by value taking value_source into account', async () => {
+      // Setup history so that sensor.temp_a has latest=15.5, max=50 after downsampling
+      // sensor.temp_b has latest=35.2, max=30 after downsampling
+      // If we sort by value (latest), temp_a < temp_b
+      // If we sort by value (max), temp_a > temp_b
+      const historyA = [{ lu: new Date().getTime() / 1000, s: '50' }];
+      const historyB = [{ lu: new Date().getTime() / 1000, s: '30' }];
+      (hass.callWS as Mock).mockImplementation((msg) => {
+        if (msg.entity_ids && msg.entity_ids[0] === 'sensor.temp_a') {
+          return Promise.resolve({ 'sensor.temp_a': historyA });
+        }
+        if (msg.entity_ids && msg.entity_ids[0] === 'sensor.temp_b') {
+          return Promise.resolve({ 'sensor.temp_b': historyB });
+        }
+        return Promise.resolve({});
+      });
+
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          { entity: 'sensor.temp_a', value_source: 'max' },
+          { entity: 'sensor.temp_b', value_source: 'max' },
+        ],
+        sort: { method: 'value', numeric: true, reverse: true },
+      });
+
+      await element.updateComplete;
+      await element.updateComplete; // wait for history fetch
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      // temp_a has max=50, temp_b has max=30. In reverse numeric sort: temp_a (Z Temperature) is first
+      expect(names).toEqual(['Z Temperature', 'A Temperature']);
+    });
+  });
 });

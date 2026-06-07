@@ -73,6 +73,12 @@ export interface EntityConfig {
   show_icon?: boolean;
 }
 
+export interface SortConfig {
+  method?: 'none' | 'name' | 'state' | 'value';
+  reverse?: boolean;
+  numeric?: boolean;
+}
+
 export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
   title?: string;
   entities: (string | EntityConfig)[];
@@ -90,4 +96,5 @@ export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
   graph_min?: number;
   graph_max?: number;
   show_icon?: boolean;
+  sort?: SortConfig;
 }
