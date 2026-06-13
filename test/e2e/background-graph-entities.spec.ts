@@ -142,7 +142,7 @@ test.describe('Background Graph Entities', () => {
     // Test that the glow filter path is rendered under the main path
     const outerGlowPath = cardElement.locator('.graph-path-glow-outer');
     await expect(outerGlowPath).toBeAttached();
-    await expect(outerGlowPath).toHaveAttribute('stroke-width', '13');
+    await expect(outerGlowPath).toHaveAttribute('stroke-width', '6.5');
     await expect(outerGlowPath).toHaveAttribute('stroke-opacity', '0.28');
 
     await page.screenshot({

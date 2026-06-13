@@ -751,8 +751,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         .attr('d', lineGenerator)
         .attr('stroke', strokeColor)
         .attr('stroke-opacity', Number((lineOpacity * 0.35).toFixed(3)))
-        .attr('stroke-width', lineWidth + 8)
-        .style('filter', 'blur(4px)');
+        .attr('stroke-width', lineWidth + 1.5)
+        .style('filter', 'blur(3px)');
 
       svg
         .append('path')
@@ -761,8 +761,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         .attr('d', lineGenerator)
         .attr('stroke', strokeColor)
         .attr('stroke-opacity', Number((lineOpacity * 0.65).toFixed(3)))
-        .attr('stroke-width', lineWidth + 3)
-        .style('filter', 'blur(1.5px)');
+        .attr('stroke-width', lineWidth + 0.5)
+        .style('filter', 'blur(1px)');
     }
 
     svg
