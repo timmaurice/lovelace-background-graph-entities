@@ -40,7 +40,9 @@
     "value_sources": {
       "latest": "Aktuell",
       "max": "Maximum",
-      "min": "Minimum"
+      "min": "Minimum",
+      "avg": "Durchschnitt",
+      "median": "Median"
     },
     "value_label": "Wert-Label",
     "value_label_helper": "Suffix nach dem Wert, z. B. (Spitze)",

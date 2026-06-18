@@ -1021,6 +1021,46 @@ describe('BackgroundGraphEntities', () => {
       expect(primary?.textContent).toContain('30');
     });
 
+    it('should display the average history value when value_source is avg', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_source: 'avg' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      // Downsampled history [30, 65, 55] → mean = 50.
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent).toContain('50');
+    });
+
+    it('should display the median history value when value_source is median', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_source: 'median' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      // Downsampled history [30, 65, 55] → sorted [30, 55, 65] → median = 55.
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent).toContain('55');
+    });
+
     it('should display the value_label after the primary value', async () => {
       (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
 

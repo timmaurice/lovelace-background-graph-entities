@@ -284,13 +284,21 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
   private _pickHistoryValue(
     history: { value: number }[] | undefined,
-    source: 'latest' | 'max' | 'min',
+    source: 'latest' | 'max' | 'min' | 'avg' | 'median',
   ): number | undefined {
     if (!history || history.length === 0) return undefined;
     const finite = history.map((h) => h.value).filter((v) => Number.isFinite(v));
     if (finite.length === 0) return undefined;
     if (source === 'max') return Math.max(...finite);
     if (source === 'min') return Math.min(...finite);
+    if (source === 'avg') return finite.reduce((sum, v) => sum + v, 0) / finite.length;
+    if (source === 'median') {
+      // Median of the downsampled points: sort a copy (don't mutate finite),
+      // then average the two middle values for an even count.
+      const sorted = [...finite].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    }
     return finite[finite.length - 1];
   }
 
