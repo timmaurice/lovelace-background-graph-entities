@@ -71,7 +71,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   @property({ type: Boolean, reflect: true }) public editMode = false;
   @state() private _config!: BackgroundGraphEntitiesConfig;
   @state() private _entities: EntityConfig[] = [];
-  @state() private _history: Map<string, { timestamp: Date; value: number }[]> = new Map();
+  @state() private _history: Map<
+    string,
+    {
+      raw: { timestamp: Date; value: number }[];
+      downsampled: { timestamp: Date; value: number }[];
+    }
+  > = new Map();
   private _historyFetched = false;
   private _timerId?: number;
 
@@ -181,8 +187,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (entityId) {
         const entityConfig = this._entities.find((e) => e.entity === entityId)!;
         const graphEntityId = entityConfig.graph_entity || entityId;
-        const history = this._history.get(graphEntityId);
-        this._renderD3Graph(container, history, entityConfig);
+        const historyData = this._history.get(graphEntityId);
+        this._renderD3Graph(container, historyData?.downsampled, entityConfig);
       }
     });
   }
@@ -283,9 +289,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   private _pickHistoryValue(
-    history: { value: number }[] | undefined,
+    historyData:
+      | {
+          raw: { value: number }[];
+          downsampled: { value: number }[];
+        }
+      | undefined,
     source: 'latest' | 'max' | 'min' | 'avg' | 'median',
   ): number | undefined {
+    if (!historyData) return undefined;
+    const history = source === 'max' || source === 'min' ? historyData.raw : historyData.downsampled;
     if (!history || history.length === 0) return undefined;
     const finite = history.map((h) => h.value).filter((v) => Number.isFinite(v));
     if (finite.length === 0) return undefined;
@@ -293,7 +306,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     if (source === 'min') return Math.min(...finite);
     if (source === 'avg') return finite.reduce((sum, v) => sum + v, 0) / finite.length;
     if (source === 'median') {
-      // Median of the downsampled points: sort a copy (don't mutate finite),
+      // Median of the points: sort a copy (don't mutate finite),
       // then average the two middle values for an even count.
       const sorted = [...finite].sort((a, b) => a - b);
       const mid = Math.floor(sorted.length / 2);
@@ -804,7 +817,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (this._history.size > 0) this._history = new Map();
       return;
     }
-    const newHistory = new Map<string, { timestamp: Date; value: number }[] | null>();
+    const newHistory = new Map<
+      string,
+      {
+        raw: { timestamp: Date; value: number }[];
+        downsampled: { timestamp: Date; value: number }[];
+      } | null
+    >();
     const historyPromises = this._entities.map(async (entityConf) => {
       const entityId = entityConf.graph_entity || entityConf.entity;
       const history = await this._fetchHistory(entityId, entityConf.entity);
@@ -815,7 +834,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     this._history = new Map(
       [...newHistory.entries()].filter(([, value]) => value !== null) as [
         string,
-        { timestamp: Date; value: number }[],
+        {
+          raw: { timestamp: Date; value: number }[];
+          downsampled: { timestamp: Date; value: number }[];
+        },
       ][],
     );
   }
@@ -823,7 +845,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   private async _fetchHistory(
     entityId: string,
     mainEntityIdForLogging?: string,
-  ): Promise<{ timestamp: Date; value: number }[] | null> {
+  ): Promise<{
+    raw: { timestamp: Date; value: number }[];
+    downsampled: { timestamp: Date; value: number }[];
+  } | null> {
     if (!this.hass?.callWS) return null;
 
     const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
@@ -847,7 +872,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
       const states = history[entityId];
       if (!states) {
-        return [];
+        return { raw: [], downsampled: [] };
       }
 
       const finalStates = states
@@ -859,7 +884,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           return { timestamp: new Date(s.lu * MS_IN_S), value };
         })
         .filter((s) => !isNaN(s.value));
-      return downsampleHistory(finalStates, hoursToShow, pointsPerHour);
+      const downsampled = downsampleHistory(finalStates, hoursToShow, pointsPerHour);
+      return { raw: finalStates, downsampled };
     } catch (err) {
       console.error(`Error fetching history for ${mainEntityIdForLogging || entityId} (using ${entityId}):`, err);
       return null;

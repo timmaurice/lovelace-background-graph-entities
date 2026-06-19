@@ -999,7 +999,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
-      expect(primary?.textContent).toContain('65');
+      expect(primary?.textContent).toContain('100');
     });
 
     it('should display the min history value when value_source is min', async () => {
@@ -1018,7 +1018,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
-      expect(primary?.textContent).toContain('30');
+      expect(primary?.textContent).toContain('10');
     });
 
     it('should display the average history value when value_source is avg', async () => {
@@ -1260,7 +1260,67 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toBe('color: rgb(128, 128, 0)');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(43, 213, 0)');
+    });
+
+    it('should color the icon using the avg-of-history threshold', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            auto_icon_color_source: 'avg',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#00ff00' },
+              { value: 60, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toContain('rgb(213, 43, 0)');
+    });
+
+    it('should color the icon using the median-of-history threshold', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            auto_icon_color_source: 'median',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#00ff00' },
+              { value: 60, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toContain('rgb(234, 21, 0)');
     });
   });
 
