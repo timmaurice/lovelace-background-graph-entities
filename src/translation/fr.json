@@ -40,7 +40,9 @@
     "value_sources": {
       "latest": "Dernier",
       "max": "Maximum",
-      "min": "Minimum"
+      "min": "Minimum",
+      "avg": "Moyenne",
+      "median": "Médiane"
     },
     "value_label": "Étiquette de la valeur",
     "value_label_helper": "Suffixe affiché après la valeur, ex. (pic)",

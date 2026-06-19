@@ -467,7 +467,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     const valueSourceAvailable =
       !!stateObj && !isBooleanState && (!entityConf.graph_entity || entityConf.graph_entity === entityConf.entity);
 
-    const valueSourceLabel = (source: 'latest' | 'max' | 'min'): string =>
+    const valueSourceLabel = (source: 'latest' | 'max' | 'min' | 'avg' | 'median'): string =>
       localize(this.hass, `component.bge.editor.value_sources.${source}`);
     const currentValueSource = entityConf.value_source ?? 'latest';
     const currentAutoIconColorSource = entityConf.auto_icon_color_source ?? 'latest';
@@ -480,7 +480,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         if (value === 'latest' || !value) {
           delete newConf[field];
         } else {
-          newConf[field] = value as 'max' | 'min';
+          newConf[field] = value as 'max' | 'min' | 'avg' | 'median';
         }
         return newConf;
       });
@@ -559,6 +559,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                       { value: 'latest', label: valueSourceLabel('latest') },
                       { value: 'max', label: valueSourceLabel('max') },
                       { value: 'min', label: valueSourceLabel('min') },
+                      { value: 'avg', label: valueSourceLabel('avg') },
+                      { value: 'median', label: valueSourceLabel('median') },
                     ]}
                     @selected=${(ev: Event) =>
                       updateEntitySourceField('auto_icon_color_source', (ev as CustomEvent).detail.value)}
@@ -613,6 +615,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                       { value: 'latest', label: valueSourceLabel('latest') },
                       { value: 'max', label: valueSourceLabel('max') },
                       { value: 'min', label: valueSourceLabel('min') },
+                      { value: 'avg', label: valueSourceLabel('avg') },
+                      { value: 'median', label: valueSourceLabel('median') },
                     ]}
                     @selected=${(ev: Event) =>
                       updateEntitySourceField('value_source', (ev as CustomEvent).detail.value)}
