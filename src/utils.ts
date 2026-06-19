@@ -1,3 +1,5 @@
+import type { FrontendLocaleData } from './types.js';
+
 export const MS_IN_S = 1000;
 export const S_IN_MIN = 60;
 export const MIN_IN_H = 60;
@@ -76,6 +78,49 @@ export function downsampleHistory(
 
   return downsampled;
 }
+
+/**
+ * Maps HA's `number_format` setting to the locale(s) Intl.NumberFormat should
+ * use. Mirrors the Home Assistant frontend's `numberFormatToLocale` so the card
+ * matches the separators users see elsewhere in HA.
+ */
+const numberFormatToLocale = (localeOptions: FrontendLocaleData): string | string[] | undefined => {
+  switch (localeOptions.number_format) {
+    case 'comma_decimal':
+      return ['en-US', 'en']; // 1,234,567.89
+    case 'decimal_comma':
+      return ['de', 'es', 'it']; // 1.234.567,89
+    case 'space_comma':
+      return ['fr', 'sv', 'cs']; // 1 234 567,89
+    case 'system':
+      return undefined; // defer to the browser/runtime default
+    default:
+      return localeOptions.language; // 'language' (or unset) → use the UI language
+  }
+};
+
+/**
+ * Formats a number using the user's HA locale, so thousands separators and the
+ * decimal mark match the rest of the HA UI. `precision` (when provided) sets a
+ * fixed number of fraction digits, matching the prior `toFixed` behavior while
+ * adding grouping. `number_format: 'none'` disables grouping entirely, the same
+ * as HA's own formatter.
+ *
+ * Falls back to a language-only locale when `locale` is absent (older hass
+ * objects / test mocks).
+ */
+export const formatNumber = (value: number, locale: FrontendLocaleData | undefined, precision?: number): string => {
+  const effectiveLocale: FrontendLocaleData = locale ?? { language: 'en' };
+  const options: Intl.NumberFormatOptions = {};
+  if (precision !== undefined) {
+    options.minimumFractionDigits = precision;
+    options.maximumFractionDigits = precision;
+  }
+  if (effectiveLocale.number_format === 'none') {
+    options.useGrouping = false;
+  }
+  return new Intl.NumberFormat(numberFormatToLocale(effectiveLocale), options).format(value);
+};
 
 /**
  * Dispatches a custom event with an optional detail value.
