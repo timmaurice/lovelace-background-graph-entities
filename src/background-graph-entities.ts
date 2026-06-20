@@ -14,7 +14,7 @@ import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
 import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
-import { downsampleHistory, MS_IN_S, S_IN_MIN } from './utils.js';
+import { downsampleHistory, formatNumber, MS_IN_S, S_IN_MIN } from './utils.js';
 
 // Default configuration values
 const DEFAULT_HOURS_TO_SHOW = 24;
@@ -494,7 +494,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         const graphDisplayPrecision = graphEntityDisplay?.display_precision;
         let graphValueToDisplay = graphStateObj.state;
         if (!isNaN(graphStateNum) && typeof graphDisplayPrecision === 'number') {
-          graphValueToDisplay = graphStateNum.toFixed(graphDisplayPrecision);
+          graphValueToDisplay = formatNumber(graphStateNum, this.hass.locale, graphDisplayPrecision);
         }
         secondaryDisplayValue = [graphValueToDisplay, graphUnit].filter(Boolean).join(' ');
       } else {
@@ -550,7 +550,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       const displayPrecision = entityDisplay?.display_precision ?? inferredPrecision;
       let valueToDisplay = effectiveStateString;
       if (!isNaN(effectiveNum) && typeof displayPrecision === 'number') {
-        valueToDisplay = effectiveNum.toFixed(displayPrecision);
+        // Use the user's HA locale so thousands separators / decimal mark match
+        // the rest of the UI, while still honoring display_precision.
+        valueToDisplay = formatNumber(effectiveNum, this.hass.locale, displayPrecision);
       }
       displayValue = [valueToDisplay, unit].filter(Boolean).join(' ');
     }

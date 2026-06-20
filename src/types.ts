@@ -4,6 +4,10 @@ export interface HomeAssistant {
   entities: { [entity_id: string]: HassEntityRegistryDisplayEntry };
   localize: (key: string, ...args: unknown[]) => string;
   language: string;
+  // The user's locale settings from HA. Drives number formatting (thousands
+  // separators / decimal mark) via `number_format`. Optional because older
+  // hass objects and test mocks may omit it; formatters fall back to `language`.
+  locale?: FrontendLocaleData;
   callWS: <T>(message: { type: string; [key: string]: unknown }) => Promise<T>;
   callService: (domain: string, service: string, serviceData?: object) => Promise<unknown>;
   themes?: {
@@ -11,6 +15,16 @@ export interface HomeAssistant {
     [key: string]: unknown;
   };
   // You can expand this with more properties from the hass object if needed
+}
+
+// The user-selectable number format from HA's profile (hass.locale.number_format).
+// Mirrors the frontend's NumberFormat enum so we can honor the user's chosen
+// grouping/decimal separators instead of always using en-US-style formatting.
+export type NumberFormat = 'language' | 'system' | 'comma_decimal' | 'decimal_comma' | 'space_comma' | 'none';
+
+export interface FrontendLocaleData {
+  language: string;
+  number_format?: NumberFormat;
 }
 
 // A basic representation of a Home Assistant entity state object

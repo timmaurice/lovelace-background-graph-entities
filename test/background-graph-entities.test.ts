@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock, beforeAll } from 'vitest';
 import { HomeAssistant, BackgroundGraphEntitiesConfig } from '../src/types';
 import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../src/background-graph-entities';
-import { downsampleHistory } from '../src/utils';
+import { downsampleHistory, formatNumber } from '../src/utils';
 
 // Mock console.info before the module is imported to prevent version logging.
 vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -179,6 +179,39 @@ describe('BackgroundGraphEntities', () => {
 
       const value = element.shadowRoot?.querySelector('.entity-value');
       expect(value?.textContent?.trim()).toBe('123.46 V');
+    });
+
+    it('should apply locale thousands separators to the displayed value', async () => {
+      hass.states['sensor.big'] = {
+        entity_id: 'sensor.big',
+        state: '1234567',
+        attributes: { friendly_name: 'Big', unit_of_measurement: 'W' },
+      };
+      hass.entities['sensor.big'] = { entity_id: 'sensor.big', display_precision: 0 };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.big'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const value = element.shadowRoot?.querySelector('.entity-value');
+      // Default mock locale is English → comma grouping.
+      expect(value?.textContent?.trim()).toBe('1,234,567 W');
+    });
+
+    it('should honor the user number_format locale (decimal_comma)', async () => {
+      hass.locale = { language: 'de', number_format: 'decimal_comma' };
+      hass.states['sensor.big'] = {
+        entity_id: 'sensor.big',
+        state: '1234567.5',
+        attributes: { friendly_name: 'Big', unit_of_measurement: 'W' },
+      };
+      hass.entities['sensor.big'] = { entity_id: 'sensor.big', display_precision: 1 };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.big'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const value = element.shadowRoot?.querySelector('.entity-value');
+      // decimal_comma → dot grouping, comma decimal mark: 1.234.567,5
+      expect(value?.textContent?.trim()).toBe('1.234.567,5 W');
     });
 
     it('should format minute values correctly', async () => {
@@ -1512,6 +1545,38 @@ describe('BackgroundGraphEntities', () => {
       );
       // temp_a has max=50, temp_b has max=30. In reverse numeric sort: temp_a (Z Temperature) is first
       expect(names).toEqual(['Z Temperature', 'A Temperature']);
+    });
+  });
+
+  describe('formatNumber', () => {
+    it('falls back to English grouping when no locale is provided', () => {
+      expect(formatNumber(1234567, undefined, 0)).toBe('1,234,567');
+    });
+
+    it('applies the requested fixed precision', () => {
+      expect(formatNumber(1234.5, { language: 'en' }, 2)).toBe('1,234.50');
+    });
+
+    it('uses comma_decimal formatting', () => {
+      expect(formatNumber(1234567.89, { language: 'en', number_format: 'comma_decimal' }, 2)).toBe('1,234,567.89');
+    });
+
+    it('uses decimal_comma formatting', () => {
+      expect(formatNumber(1234567.89, { language: 'de', number_format: 'decimal_comma' }, 2)).toBe('1.234.567,89');
+    });
+
+    it('uses space_comma formatting', () => {
+      // ICU uses a narrow no-break space (U+202F) as the French group separator;
+      // normalize to a plain space so the assertion isn't brittle across ICU versions.
+      const formatted = formatNumber(1234567.89, { language: 'fr', number_format: 'space_comma' }, 2).replace(
+        /\s/g,
+        ' ',
+      );
+      expect(formatted).toBe('1 234 567,89');
+    });
+
+    it('disables grouping for number_format "none"', () => {
+      expect(formatNumber(1234567, { language: 'en', number_format: 'none' }, 0)).toBe('1234567');
     });
   });
 });
