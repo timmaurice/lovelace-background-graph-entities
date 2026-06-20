@@ -9,12 +9,12 @@ import {
   EntityConfig,
   ColorThreshold,
 } from './types.js';
-import { extent } from 'd3-array';
 import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
 import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
 import { downsampleHistory, formatNumber, MS_IN_S, S_IN_MIN } from './utils.js';
+import { extent, max as d3max, min as d3min } from 'd3-array';
 
 // Default configuration values
 const DEFAULT_HOURS_TO_SHOW = 24;
@@ -302,8 +302,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     if (!history || history.length === 0) return undefined;
     const finite = history.map((h) => h.value).filter((v) => Number.isFinite(v));
     if (finite.length === 0) return undefined;
-    if (source === 'max') return Math.max(...finite);
-    if (source === 'min') return Math.min(...finite);
+    if (source === 'max') return d3max(finite);
+    if (source === 'min') return d3min(finite);
     if (source === 'avg') return finite.reduce((sum, v) => sum + v, 0) / finite.length;
     if (source === 'median') {
       // Median of the points: sort a copy (don't mutate finite),
