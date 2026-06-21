@@ -432,6 +432,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         delete newEntityConf.line_color;
         delete newEntityConf.line_opacity;
         delete newEntityConf.color_thresholds;
+        delete newEntityConf.graph_min;
+        delete newEntityConf.graph_max;
       }
       return newEntityConf;
     });
