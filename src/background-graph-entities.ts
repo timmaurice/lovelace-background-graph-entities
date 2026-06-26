@@ -894,15 +894,88 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
   }
 
+  private _getAverageTitleSuffix(): string {
+    if (!this._config?.average_in_title) {
+      return '';
+    }
+
+    let sum = 0;
+    let count = 0;
+    let firstUnit: string | null = null;
+    let allSameUnit = true;
+    let maxPrecision = 0;
+
+    for (const entityConfig of this._entities) {
+      const stateObj = this.hass.states[entityConfig.entity];
+      if (!stateObj) continue;
+
+      const isBooleanState = stateObj.state === 'on' || stateObj.state === 'off';
+      if (isBooleanState) continue;
+
+      const stateNum = parseFloat(stateObj.state);
+      if (isNaN(stateNum)) continue;
+
+      const canUseValueSource = !entityConfig.graph_entity || entityConfig.graph_entity === entityConfig.entity;
+      const valueSource = canUseValueSource ? (entityConfig.value_source ?? 'latest') : 'latest';
+
+      let effectiveNum = stateNum;
+      if (valueSource !== 'latest') {
+        const historyValue = this._pickHistoryValue(this._history.get(entityConfig.entity), valueSource);
+        if (historyValue !== undefined) {
+          effectiveNum = historyValue;
+        }
+      }
+
+      sum += effectiveNum;
+      count++;
+
+      // Unit
+      const unit = stateObj.attributes.unit_of_measurement ?? '';
+      if (firstUnit === null) {
+        firstUnit = unit;
+      } else if (firstUnit !== unit) {
+        allSameUnit = false;
+      }
+
+      // Precision
+      const entityDisplay = this.hass.entities[entityConfig.entity];
+      const inferredPrecision = stateObj.state.includes('.')
+        ? stateObj.state.length - stateObj.state.indexOf('.') - 1
+        : 0;
+      const displayPrecision = entityDisplay?.display_precision ?? inferredPrecision;
+      if (displayPrecision !== undefined && displayPrecision > maxPrecision) {
+        maxPrecision = displayPrecision;
+      }
+    }
+
+    if (count === 0) return '';
+
+    const average = sum / count;
+    const formattedAverage = formatNumber(average, this.hass.locale, maxPrecision);
+
+    const unitStr = allSameUnit && firstUnit ? ` ${firstUnit}` : '';
+    return formattedAverage + unitStr;
+  }
+
   protected render(): TemplateResult {
     if (!this._config || !this.hass) {
       return html``;
     }
 
     const sortedEntities = this._getSortedEntities();
+    const title = this._config.title;
+    const averageSuffix = this._getAverageTitleSuffix();
 
     return html`
-      <ha-card .header=${this._config.title}>
+      <ha-card>
+        ${title || averageSuffix
+          ? html`
+              <div class="card-header">
+                <div class="name">${title}</div>
+                <div class="value">${averageSuffix}</div>
+              </div>
+            `
+          : ''}
         <div
           class="card-content ${this._config.tile_style ? 'tile' : ''} ${this._config.line_length === 'short'
             ? 'short'

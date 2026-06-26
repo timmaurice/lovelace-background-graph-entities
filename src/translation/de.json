@@ -2,6 +2,8 @@
   "editor": {
     "general": "Allgemein",
     "title": "Titel (Optional)",
+    "average_in_title": "Durchschnitt im Titel anzeigen",
+    "average_in_title_helper": "Ist nur sinnvoll beim Vergleich von Daten desselben Typs (z. B. nur Temperaturen oder nur Luftfeuchtigkeiten). Der Durchschnitt verschiedener Messwerte ist nicht empfehlenswert.",
     "layout": "Layout",
     "tile_style": "Kompakterer Kachel-Stil",
     "graph_appearance": "Graph-Darstellung",

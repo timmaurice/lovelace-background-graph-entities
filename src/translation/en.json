@@ -2,6 +2,8 @@
   "editor": {
     "general": "General",
     "title": "Title (Optional)",
+    "average_in_title": "Show Average in Title",
+    "average_in_title_helper": "Only makes sense when comparing data of the same type (e.g., all temperatures or all humidities). Averaging different metrics is not recommended.",
     "layout": "Layout",
     "tile_style": "More Compact Tile Style",
     "graph_appearance": "Graph Appearance",

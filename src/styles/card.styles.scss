@@ -175,3 +175,29 @@
     text-transform: initial;
   }
 }
+
+.card-header {
+  align-items: center;
+  color: var(--ha-card-header-color, var(--primary-text-color));
+  display: flex;
+  font-family: var(--ha-card-header-font-family, inherit);
+  font-size: var(--ha-card-header-font-size, 24px);
+  font-weight: normal;
+  justify-content: space-between;
+  letter-spacing: -0.012em;
+  line-height: 32px;
+  padding: 24px 16px 16px;
+
+  .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .value {
+    color: var(--secondary-text-color);
+    flex-shrink: 0;
+    font-weight: normal;
+    margin-left: 16px;
+  }
+}

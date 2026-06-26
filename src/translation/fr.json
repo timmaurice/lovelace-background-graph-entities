@@ -2,6 +2,8 @@
   "editor": {
     "general": "Général",
     "title": "Titre (Optionnel)",
+    "average_in_title": "Afficher la moyenne dans le titre",
+    "average_in_title_helper": "N'a de sens que lors de la comparaison de données du même type (par exemple, uniquement des températures ou uniquement des humidités). La moyenne de différentes mesures n'est pas recommandée.",
     "layout": "Mise en page",
     "tile_style": "Style de tuile plus compact",
     "graph_appearance": "Apparence du graphique",

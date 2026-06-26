@@ -111,4 +111,5 @@ export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
   graph_max?: number;
   show_icon?: boolean;
   sort?: SortConfig;
+  average_in_title?: boolean;
 }

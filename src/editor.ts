@@ -866,6 +866,19 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             @change=${this._valueChanged}
           ></ha-input>
         </div>
+        <div class="formfield-with-help">
+          <ha-formfield .label=${localize(this.hass, 'component.bge.editor.average_in_title')}>
+            <ha-switch
+              .checked=${this._config.average_in_title === true}
+              .configValue=${'average_in_title'}
+              @change=${this._valueChanged}
+            ></ha-switch>
+          </ha-formfield>
+          <div class="tooltip-container">
+            <ha-icon class="help-icon" icon="mdi:help-circle-outline"></ha-icon>
+            <div class="tooltip-content">${localize(this.hass, 'component.bge.editor.average_in_title_helper')}</div>
+          </div>
+        </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.layout')}</h3>
         <ha-formfield .label=${localize(this.hass, 'component.bge.editor.tile_style')}>

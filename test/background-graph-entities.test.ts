@@ -11,10 +11,6 @@ window.requestAnimationFrame = vi.fn().mockImplementation((cb) => setTimeout(() 
 window.cancelAnimationFrame = vi.fn().mockImplementation((id) => clearTimeout(id));
 
 import { scaleLinear } from 'd3-scale';
-// Define a minimal interface for the ha-card element to satisfy TypeScript
-interface HaCard extends HTMLElement {
-  header?: string;
-}
 
 // Define a minimal interface for the ha-switch element
 interface HaSwitch extends HTMLElement {
@@ -102,9 +98,146 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, title: 'My Test Card' });
       await element.updateComplete;
 
-      const card = element.shadowRoot?.querySelector<HaCard>('ha-card');
-      expect(card).not.toBeNull();
-      expect(card?.header).toBe('My Test Card');
+      const header = element.shadowRoot?.querySelector('.card-header');
+      expect(header).not.toBeNull();
+      expect(header?.querySelector('.name')?.textContent?.trim()).toBe('My Test Card');
+      expect(header?.querySelector('.value')?.textContent?.trim()).toBe('');
+    });
+
+    it('should render the average in the title if average_in_title is enabled', async () => {
+      element.hass = {
+        ...hass,
+        states: {
+          'sensor.test1': {
+            entity_id: 'sensor.test1',
+            state: '10.5',
+            attributes: {
+              unit_of_measurement: '°C',
+            },
+          },
+          'sensor.test2': {
+            entity_id: 'sensor.test2',
+            state: '20.5',
+            attributes: {
+              unit_of_measurement: '°C',
+            },
+          },
+        },
+      };
+      element.setConfig({
+        ...config,
+        title: 'Temperature',
+        entities: ['sensor.test1', 'sensor.test2'],
+        average_in_title: true,
+      });
+      await element.updateComplete;
+
+      const header = element.shadowRoot?.querySelector('.card-header');
+      expect(header).not.toBeNull();
+      expect(header?.querySelector('.name')?.textContent?.trim()).toBe('Temperature');
+      expect(header?.querySelector('.value')?.textContent?.trim()).toBe('15.5 °C');
+    });
+
+    it('should render only the average if title is not provided and average_in_title is enabled', async () => {
+      element.hass = {
+        ...hass,
+        states: {
+          'sensor.test1': {
+            entity_id: 'sensor.test1',
+            state: '10.5',
+            attributes: {
+              unit_of_measurement: '°C',
+            },
+          },
+          'sensor.test2': {
+            entity_id: 'sensor.test2',
+            state: '20.5',
+            attributes: {
+              unit_of_measurement: '°C',
+            },
+          },
+        },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.test1', 'sensor.test2'],
+        average_in_title: true,
+      });
+      await element.updateComplete;
+
+      const header = element.shadowRoot?.querySelector('.card-header');
+      expect(header).not.toBeNull();
+      expect(header?.querySelector('.name')?.textContent?.trim()).toBe('');
+      expect(header?.querySelector('.value')?.textContent?.trim()).toBe('15.5 °C');
+    });
+
+    it('should skip non-numeric and boolean entities when calculating average in title', async () => {
+      element.hass = {
+        ...hass,
+        states: {
+          'sensor.test1': {
+            entity_id: 'sensor.test1',
+            state: '10',
+            attributes: {
+              unit_of_measurement: '°C',
+            },
+          },
+          'binary_sensor.test2': {
+            entity_id: 'binary_sensor.test2',
+            state: 'on',
+            attributes: {},
+          },
+          'sensor.test3': {
+            entity_id: 'sensor.test3',
+            state: 'unknown',
+            attributes: {},
+          },
+        },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.test1', 'binary_sensor.test2', 'sensor.test3'],
+        average_in_title: true,
+      });
+      await element.updateComplete;
+
+      const header = element.shadowRoot?.querySelector('.card-header');
+      expect(header).not.toBeNull();
+      expect(header?.querySelector('.name')?.textContent?.trim()).toBe('');
+      expect(header?.querySelector('.value')?.textContent?.trim()).toBe('10 °C');
+    });
+
+    it('should not display unit if entities have mismatched units', async () => {
+      element.hass = {
+        ...hass,
+        states: {
+          'sensor.test1': {
+            entity_id: 'sensor.test1',
+            state: '10',
+            attributes: {
+              unit_of_measurement: '°C',
+            },
+          },
+          'sensor.test2': {
+            entity_id: 'sensor.test2',
+            state: '20',
+            attributes: {
+              unit_of_measurement: '%',
+            },
+          },
+        },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.test1', 'sensor.test2'],
+        average_in_title: true,
+      });
+      await element.updateComplete;
+
+      const header = element.shadowRoot?.querySelector('.card-header');
+      expect(header).not.toBeNull();
+      expect(header?.querySelector('.name')?.textContent?.trim()).toBe('');
+      expect(header?.querySelector('.value')?.textContent?.trim()).toBe('15');
     });
 
     it('should throw an error if no entities are provided in config', () => {
