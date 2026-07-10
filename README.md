@@ -323,8 +323,6 @@ To contribute to the development, you'll need to set up a build environment.
 
 For further assistance or to report issues, please visit the [GitHub repository](https://github.com/timmaurice/lovelace-background-graph-entities).
 
-![Star History Chart](https://api.star-history.com/svg?repos=timmaurice/lovelace-background-graph-entities&type=Date)
-
 ## ☕ Support My Work
 
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="30" />](https://www.buymeacoffee.com/timmaurice)
