@@ -502,6 +502,37 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       }
     }
 
+    // `secondary_value_entity` is a plain, independent extra value: unlike `graph_entity`,
+    // it never affects what's graphed or what the row's click target opens. It just shows
+    // another entity's current state next to the main entity's state.
+    let extraDisplayValue: string | undefined;
+    if (entityConfig.secondary_value_entity) {
+      const extraStateObj = this.hass.states[entityConfig.secondary_value_entity];
+      if (extraStateObj) {
+        const extraEntityDisplay = this.hass.entities[entityConfig.secondary_value_entity];
+        const extraUnit = extraStateObj.attributes.unit_of_measurement ?? '';
+        const extraStateNum = parseFloat(extraStateObj.state);
+
+        const extraDisplayPrecision = extraEntityDisplay?.display_precision;
+        let extraValueToDisplay = extraStateObj.state;
+        if (!isNaN(extraStateNum) && typeof extraDisplayPrecision === 'number') {
+          extraValueToDisplay = formatNumber(extraStateNum, this.hass.locale, extraDisplayPrecision);
+        }
+        const formattedExtraValue = [extraValueToDisplay, extraUnit].filter(Boolean).join(' ');
+
+        const extraName =
+          entityConfig.secondary_value_name === true
+            ? (extraStateObj.attributes.friendly_name ?? entityConfig.secondary_value_entity)
+            : typeof entityConfig.secondary_value_name === 'string'
+              ? entityConfig.secondary_value_name
+              : undefined;
+
+        extraDisplayValue = extraName ? `${extraName}: ${formattedExtraValue}` : formattedExtraValue;
+      } else {
+        extraDisplayValue = this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
+      }
+    }
+
     const iconStyle = iconColor ? `color: ${iconColor}` : '';
     const handleKeyboardToggle = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -602,6 +633,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               <span class="primary-value">${displayValue}</span>
               ${valueLabel ? html`<span class="value-label">${valueLabel}</span>` : ''}
               ${secondaryDisplayValue ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>` : ''}
+              ${extraDisplayValue ? html`<span class="extra-value">· ${extraDisplayValue}</span>` : ''}
             </div>
           </div>
           <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
@@ -627,6 +659,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           ${isToggleable && !isTileStyle && secondaryDisplayValue
             ? html`<span class="secondary-value-inline">${secondaryDisplayValue}</span>`
             : ''}
+          ${isToggleable && !isTileStyle && extraDisplayValue
+            ? html`<span class="secondary-value-inline">${extraDisplayValue}</span>`
+            : ''}
         </div>
         <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
         ${isToggleable && !isTileStyle
@@ -648,6 +683,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               ${!isToggleable && secondaryDisplayValue
                 ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
                 : ''}
+              ${!isToggleable && extraDisplayValue ? html`<span class="extra-value">· ${extraDisplayValue}</span>` : ''}
             </div>`}
       </div>
     `;

@@ -741,6 +741,144 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Independent Secondary Value (secondary_value_entity)', () => {
+    beforeEach(() => {
+      hass.states['sensor.temperature'] = {
+        entity_id: 'sensor.temperature',
+        state: '21.3',
+        attributes: { friendly_name: 'Temperature', unit_of_measurement: '°C' },
+      };
+      hass.states['sensor.humidity'] = {
+        entity_id: 'sensor.humidity',
+        state: '54.2',
+        attributes: { friendly_name: 'Humidity', unit_of_measurement: '%' },
+      };
+      hass.entities['sensor.humidity'] = {
+        entity_id: 'sensor.humidity',
+        display_precision: 0,
+      };
+    });
+
+    it('should display the extra value next to the main value', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            secondary_value_entity: 'sensor.humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue).not.toBeNull();
+      expect(extraValue?.textContent?.trim()).toBe('· 54 %');
+    });
+
+    it('should not affect the graphed entity or the click target', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            secondary_value_entity: 'sensor.humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const primaryValue = element.shadowRoot?.querySelector('.primary-value');
+      expect(primaryValue?.textContent?.trim()).toBe('21.3 °C');
+
+      const dispatchSpy = vi.spyOn(element, 'dispatchEvent');
+      const row = element.shadowRoot?.querySelector('.entity-row') as HTMLElement;
+      row.click();
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'hass-more-info',
+          detail: { entityId: 'sensor.temperature' },
+        }),
+      );
+    });
+
+    it('should prefix the extra value with a custom label', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            secondary_value_entity: 'sensor.humidity',
+            secondary_value_name: 'Humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue?.textContent?.trim()).toBe('· Humidity: 54 %');
+    });
+
+    it('should display "unavailable" for a missing secondary_value_entity', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            secondary_value_entity: 'sensor.does_not_exist',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue).not.toBeNull();
+      expect(extraValue?.textContent?.trim()).toBe('· state.default.unavailable');
+    });
+
+    it('should not display an extra value when secondary_value_entity is not defined', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.temperature' }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue).toBeNull();
+    });
+
+    it('should work together with graph_entity/show_graph_entity_state on the same row', async () => {
+      hass.states['sensor.power'] = {
+        entity_id: 'sensor.power',
+        state: '42',
+        attributes: { friendly_name: 'Power', unit_of_measurement: 'W' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            graph_entity: 'sensor.power',
+            show_graph_entity_state: true,
+            secondary_value_entity: 'sensor.humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const secondaryValue = element.shadowRoot?.querySelector('.secondary-value');
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(secondaryValue?.textContent?.trim()).toBe('· 42 W');
+      expect(extraValue?.textContent?.trim()).toBe('· 54 %');
+    });
+  });
+
   describe('Graph Y-axis bounds', () => {
     const Y_AXIS_PADDING_FACTOR = 0.1;
     const historyData = [
