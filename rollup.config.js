@@ -56,6 +56,10 @@ export default {
         const result = compile(filePath, {
           style: dev ? 'expanded' : 'compressed',
           loadPaths: [path.dirname(filePath)],
+          // Without this, any non-ASCII character in the SCSS (a middle dot, a degree
+          // sign) makes Sass prepend a BOM. The CSS is inlined into a lit template, so
+          // that BOM ends up glued to the first selector and silently kills that rule.
+          charset: false,
         });
         return result.css.toString();
       },

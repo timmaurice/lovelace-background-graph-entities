@@ -102,6 +102,11 @@ test.describe('Background Graph Entities', () => {
     const cardElement = page.locator('background-graph-entities');
     await expect(cardElement).toBeVisible();
 
+    // Guards the first rule in the compiled stylesheet. A non-ASCII character in the SCSS
+    // makes Sass emit a BOM that gets glued to the first selector and silently kills it,
+    // which is invisible to jsdom and to every text-based assertion.
+    await expect(cardElement.locator('.card-content')).toHaveCSS('padding', '16px');
+
     const rows = cardElement.locator('.entity-row');
     await expect(rows).toHaveCount(3);
 
