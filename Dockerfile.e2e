@@ -1,4 +1,6 @@
-FROM node:20-bookworm
+# Ships browsers + OS deps, so no `playwright install --with-deps` and no apt.
+# Keep this tag in sync with @playwright/test in package.json.
+FROM mcr.microsoft.com/playwright:v1.62.1-noble
 
 WORKDIR /app
 
@@ -7,9 +9,6 @@ COPY package.json package-lock.json ./
 
 # Install dependencies
 RUN npm ci
-
-# Install Playwright browsers and OS dependencies
-RUN npx playwright install --with-deps
 
 # Copy the rest of the project
 COPY . .
