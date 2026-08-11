@@ -125,6 +125,19 @@
   @extend %secondary-value-style;
 }
 
+// .extra-value is fed by secondary_value_entity. Styled identically to
+// .secondary-value (the graph_entity secondary display) so both mechanisms
+// render as the same muted, smaller-size footnote next to the main state.
+.extra-value {
+  margin-left: 2px;
+  @extend %secondary-value-style;
+}
+
+.extra-value-inline {
+  margin-left: 4px;
+  @extend %secondary-value-style;
+}
+
 .tile .entity-name {
   font-weight: bold;
 }
