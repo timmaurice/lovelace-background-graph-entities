@@ -32,6 +32,7 @@ const ELEMENT_NAME = 'background-graph-entities';
 const EDITOR_ELEMENT_NAME = `${ELEMENT_NAME}-editor`;
 const UNAVAILABLE_ICON = 'mdi:alert-circle-outline';
 const UNAVAILABLE_TEXT = 'Unavailable';
+const UNKNOWN_TEXT = 'Unknown';
 
 const CURVE_FACTORIES = {
   linear: curveLinear,
@@ -466,6 +467,50 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     });
   }
 
+  // HA reports these two states for every domain. They are words, not measurements, so
+  // they must never be run through number formatting or get a unit appended ("unknown °C").
+  private _localizeSpecialState(state: string): string | undefined {
+    if (state === 'unavailable') return this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
+    if (state === 'unknown') return this.hass.localize('state.default.unknown') || UNKNOWN_TEXT;
+    return undefined;
+  }
+
+  // Formats another entity's state for display next to the main value, shared by
+  // graph_entity and extra_value_entity so both read the same. nameConfig (extra_value_name
+  // only) labels it: a string verbatim, `true` the friendly name. The label survives an
+  // unavailable entity, so the row still says which value is missing.
+  private _formatCompanionValue(entityId: string, nameConfig?: string | boolean): string {
+    const stateObj = this.hass.states[entityId];
+
+    const label =
+      nameConfig === true
+        ? (stateObj?.attributes.friendly_name ?? entityId)
+        : typeof nameConfig === 'string'
+          ? nameConfig
+          : undefined;
+
+    let value: string;
+    if (!stateObj) {
+      value = this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
+    } else {
+      const specialState = this._localizeSpecialState(stateObj.state);
+      if (specialState) {
+        value = specialState;
+      } else {
+        const unit = stateObj.attributes.unit_of_measurement ?? '';
+        const stateNum = parseFloat(stateObj.state);
+        const displayPrecision = this.hass.entities[entityId]?.display_precision;
+        const formattedValue =
+          !isNaN(stateNum) && typeof displayPrecision === 'number'
+            ? formatNumber(stateNum, this.hass.locale, displayPrecision)
+            : stateObj.state;
+        value = [formattedValue, unit].filter(Boolean).join(' ');
+      }
+    }
+
+    return label ? `${label}: ${value}` : value;
+  }
+
   private _renderEntityRow(entityConfig: EntityConfig): TemplateResult {
     const stateObj = this.hass.states[entityConfig.entity];
     if (!stateObj) return this._renderUnavailableEntityRow(entityConfig);
@@ -483,55 +528,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const showGraphState = entityConfig.show_graph_entity_state ?? false;
     const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
 
-    let secondaryDisplayValue: string | undefined;
-    if (entityConfig.graph_entity && showGraphState) {
-      const graphStateObj = this.hass.states[entityConfig.graph_entity];
-      if (graphStateObj) {
-        const graphEntityDisplay = this.hass.entities[entityConfig.graph_entity];
-        const graphUnit = graphStateObj.attributes.unit_of_measurement ?? '';
-        const graphStateNum = parseFloat(graphStateObj.state);
+    const secondaryDisplayValue =
+      entityConfig.graph_entity && showGraphState ? this._formatCompanionValue(entityConfig.graph_entity) : undefined;
 
-        const graphDisplayPrecision = graphEntityDisplay?.display_precision;
-        let graphValueToDisplay = graphStateObj.state;
-        if (!isNaN(graphStateNum) && typeof graphDisplayPrecision === 'number') {
-          graphValueToDisplay = formatNumber(graphStateNum, this.hass.locale, graphDisplayPrecision);
-        }
-        secondaryDisplayValue = [graphValueToDisplay, graphUnit].filter(Boolean).join(' ');
-      } else {
-        secondaryDisplayValue = this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
-      }
-    }
-
-    // `secondary_value_entity` is a plain, independent extra value: unlike `graph_entity`,
-    // it never affects what's graphed or what the row's click target opens. It just shows
-    // another entity's current state next to the main entity's state.
-    let extraDisplayValue: string | undefined;
-    if (entityConfig.secondary_value_entity) {
-      const extraStateObj = this.hass.states[entityConfig.secondary_value_entity];
-      if (extraStateObj) {
-        const extraEntityDisplay = this.hass.entities[entityConfig.secondary_value_entity];
-        const extraUnit = extraStateObj.attributes.unit_of_measurement ?? '';
-        const extraStateNum = parseFloat(extraStateObj.state);
-
-        const extraDisplayPrecision = extraEntityDisplay?.display_precision;
-        let extraValueToDisplay = extraStateObj.state;
-        if (!isNaN(extraStateNum) && typeof extraDisplayPrecision === 'number') {
-          extraValueToDisplay = formatNumber(extraStateNum, this.hass.locale, extraDisplayPrecision);
-        }
-        const formattedExtraValue = [extraValueToDisplay, extraUnit].filter(Boolean).join(' ');
-
-        const extraName =
-          entityConfig.secondary_value_name === true
-            ? (extraStateObj.attributes.friendly_name ?? entityConfig.secondary_value_entity)
-            : typeof entityConfig.secondary_value_name === 'string'
-              ? entityConfig.secondary_value_name
-              : undefined;
-
-        extraDisplayValue = extraName ? `${extraName}: ${formattedExtraValue}` : formattedExtraValue;
-      } else {
-        extraDisplayValue = this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
-      }
-    }
+    // Unlike graph_entity, extra_value_entity never affects the graph or the click target.
+    const extraDisplayValue = entityConfig.extra_value_entity
+      ? this._formatCompanionValue(entityConfig.extra_value_entity, entityConfig.extra_value_name)
+      : undefined;
 
     const iconStyle = iconColor ? `color: ${iconColor}` : '';
     const handleKeyboardToggle = (e: KeyboardEvent) => {
@@ -559,8 +562,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       }
     }
 
-    // Special formatting for time in minutes
-    if (unit.toLowerCase() === 'min') {
+    // Checked against the effective value, so a max/min/avg drawn from history still shows
+    // even while the entity itself is currently unknown or unavailable.
+    const specialState = this._localizeSpecialState(effectiveStateString);
+
+    if (specialState) {
+      displayValue = specialState;
+    } else if (unit.toLowerCase() === 'min') {
+      // Special formatting for time in minutes
       if (effectiveNum >= S_IN_MIN) {
         const hours = Math.floor(effectiveNum / S_IN_MIN);
         const minutes = effectiveNum % S_IN_MIN;
@@ -671,7 +680,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           }
           ${
             isToggleable && !isTileStyle && extraDisplayValue
-              ? html`<span class="secondary-value-inline">${extraDisplayValue}</span>`
+              ? html`<span class="extra-value-inline">${extraDisplayValue}</span>`
               : ''
           }
         </div>
@@ -691,14 +700,21 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
                 </div>
               `
             : html`<div class="entity-value">
-                <span class="primary-value">${displayValue}</span>
-                ${valueLabel ? html`<span class="value-label">${valueLabel}</span>` : ''}
+                <span class="value-line">
+                  <span class="primary-value">${displayValue}</span>
+                  ${valueLabel ? html`<span class="value-label">${valueLabel}</span>` : ''}
+                </span>
                 ${
-                  !isToggleable && secondaryDisplayValue
-                    ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
+                  // Companion values sit on their own line under the main value so long
+                  // labels don't stretch across the graph. A separator is only drawn
+                  // between them, by CSS, when both are present.
+                  !isToggleable && (secondaryDisplayValue || extraDisplayValue)
+                    ? html`<span class="companion-line">
+                        ${secondaryDisplayValue ? html`<span class="secondary-value">${secondaryDisplayValue}</span>` : ''}
+                        ${extraDisplayValue ? html`<span class="extra-value">${extraDisplayValue}</span>` : ''}
+                      </span>`
                     : ''
                 }
-                ${!isToggleable && extraDisplayValue ? html`<span class="extra-value">· ${extraDisplayValue}</span>` : ''}
               </div>`
         }
       </div>

@@ -136,8 +136,8 @@ Each entry in the `entities` list can be a string (the entity ID) or an object w
 | `value_label`                | string         | `''`                      | Optional suffix shown after the displayed value, e.g. `(peak)`. Same availability constraints as `value_source`.                                                                                                                                                |
 | `graph_entity`               | string         | `entity` ID               | An optional entity ID to use for the graph's history data, instead of the main entity.                                                                                                                                                                          |
 | `show_graph_entity_state`    | boolean        | `false`                   | If `graph_entity` is set, set this to `true` to display its state next to the main entity's state.                                                                                                                                                              |
-| `secondary_value_entity`     | string         | `undefined`               | An independent extra entity whose current state is shown next to the main value. Unlike `graph_entity`, it never affects what's graphed or the row's click target (clicking always opens `entity`'s more-info) — it's purely a second value.                    |
-| `secondary_value_name`       | string/boolean | `undefined`               | Only used with `secondary_value_entity`. Set a custom label shown before the value (`"Label: value"`), or `true` to use that entity's friendly name as the label. Omit for just the bare value.                                                                 |
+| `extra_value_entity`         | string         | `undefined`               | An independent extra entity whose current state is shown next to the main value. Unlike `graph_entity`, it never affects what's graphed or the row's click target (clicking always opens `entity`'s more-info) — it's purely a second value.                    |
+| `extra_value_name`           | string/boolean | `undefined`               | Only used with `extra_value_entity`. Set a custom label shown before the value (`"Label: value"`), or `true` to use that entity's friendly name as the label. Omit for just the bare value.                                                                     |
 | `overwrite_graph_appearance` | boolean        | `false`                   | Set to `true` to enable entity-specific graph settings below. Required for per-entity overrides to apply.                                                                                                                                                       |
 | `line_color`                 | string         | Global `line_color`       | Overrides the global `line_color` for this entity only.                                                                                                                                                                                                         |
 | `line_opacity`               | number         | Global `line_opacity`     | Overrides the global `line_opacity` for this entity only.                                                                                                                                                                                                       |
@@ -234,11 +234,15 @@ entities:
     show_graph_entity_state: true
 ```
 
-#### 4. Independent Secondary Value (graph stays on the main entity)
+#### 4. Independent Extra Value (graph stays on the main entity)
 
-Unlike `graph_entity`, `secondary_value_entity` is a plain extra value — it doesn't change what's
+Unlike `graph_entity`, `extra_value_entity` is a plain extra value — it doesn't change what's
 graphed and doesn't change the row's click target. Here the graph and the click both stay on the
 temperature sensor, while humidity is shown alongside it as plain text.
+
+Extra values — both this one and `graph_entity`'s `show_graph_entity_state` — render on a second
+line beneath the main value, so long labels don't cover the graph. Row height is unchanged. In
+`tile_style` they stay on one line, separated by a middle dot.
 
 ```yaml
 type: custom:background-graph-entities
@@ -246,7 +250,18 @@ title: Rooms
 entities:
   - entity: sensor.kitchen_temperature
     name: Kitchen
-    secondary_value_entity: sensor.kitchen_humidity
+    extra_value_entity: sensor.kitchen_humidity
+```
+
+Add `extra_value_name` to label it — a string of your own, or `true` to reuse the extra entity's
+friendly name:
+
+```yaml
+entities:
+  - entity: sensor.kitchen_temperature
+    name: Kitchen
+    extra_value_entity: sensor.kitchen_humidity
+    extra_value_name: Humidity # renders as "21.3 °C · Humidity: 54 %"
 ```
 
 #### 5. Auto Sorting Example

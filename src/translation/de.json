@@ -51,6 +51,11 @@
     "graph_entity": "Graph-Entität (Optional)",
     "show_graph_entity_state": "Zustand der Graph-Entität anzeigen",
     "graph_entity_helper": "Überschreibt die Entität, die für die Verlaufsdaten des Graphen verwendet wird.",
+    "extra_value_entity": "Zusätzliche Wert-Entität (Optional)",
+    "extra_value_entity_helper": "Zeigt den Zustand einer weiteren Entität neben dem Hauptwert. Ändert weder den Graphen noch das Klickziel.",
+    "extra_value_use_entity_name": "Entitätsnamen als Label verwenden",
+    "extra_value_name": "Label für zusätzlichen Wert",
+    "extra_value_name_helper": "Eigenes Label vor dem zusätzlichen Wert, z. B. Luftfeuchtigkeit.",
     "curve": "Kurventyp",
     "curves": {
       "spline": "Spline",

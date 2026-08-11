@@ -51,6 +51,11 @@
     "graph_entity": "Graph Entity (Optional)",
     "show_graph_entity_state": "Show Graph Entity State",
     "graph_entity_helper": "Override the entity used for the graph's history data.",
+    "extra_value_entity": "Extra Value Entity (Optional)",
+    "extra_value_entity_helper": "Show another entity's state next to the main value. Does not change the graph or the click target.",
+    "extra_value_use_entity_name": "Use Entity Name As Label",
+    "extra_value_name": "Extra Value Label",
+    "extra_value_name_helper": "Custom label shown before the extra value, e.g. Humidity.",
     "curve": "Curve Type",
     "curves": {
       "spline": "Spline",

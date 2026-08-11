@@ -78,8 +78,8 @@ export interface EntityConfig {
   value_label?: string;
   graph_entity?: string;
   show_graph_entity_state?: boolean;
-  secondary_value_entity?: string;
-  secondary_value_name?: string | boolean;
+  extra_value_entity?: string;
+  extra_value_name?: string | boolean;
   overwrite_graph_appearance?: boolean;
   line_color?: string;
   line_opacity?: number;

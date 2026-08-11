@@ -51,6 +51,11 @@
     "graph_entity": "Entité du graphique (Optionnel)",
     "show_graph_entity_state": "Afficher l'état de l'entité du graphique",
     "graph_entity_helper": "Remplace l'entité utilisée pour les données d'historique du graphique.",
+    "extra_value_entity": "Entité de valeur supplémentaire (Optionnel)",
+    "extra_value_entity_helper": "Affiche l'état d'une autre entité à côté de la valeur principale. Ne modifie ni le graphique ni la cible du clic.",
+    "extra_value_use_entity_name": "Utiliser le nom de l'entité comme étiquette",
+    "extra_value_name": "Étiquette de la valeur supplémentaire",
+    "extra_value_name_helper": "Étiquette personnalisée affichée avant la valeur supplémentaire, ex. Humidité.",
     "curve": "Type de courbe",
     "curves": {
       "spline": "Spline",

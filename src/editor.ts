@@ -250,6 +250,26 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     });
   }
 
+  // The switch and the text field share the extra_value_name key (`true` = friendly name,
+  // string = custom label), so switching off deletes it instead of writing a no-op `false`.
+  private _extraValueUseEntityNameChanged(ev: Event): void {
+    const target = ev.target as HTMLInputElement;
+    const index = Number((target as HTMLElement).dataset.index);
+    if (isNaN(index)) return;
+
+    const useEntityName = target.checked;
+
+    this._updateEntityOrGlobalConfig(index, (entityConf) => {
+      const newEntityConf = { ...entityConf } as Partial<EntityConfig>;
+      if (useEntityName) {
+        newEntityConf.extra_value_name = true;
+      } else {
+        delete newEntityConf.extra_value_name;
+      }
+      return newEntityConf;
+    });
+  }
+
   private _entityAttributeChanged(ev: Event): void {
     const target = ev.target as HTMLElement & { value?: string; type?: string };
     const index = Number(target.dataset.index);
@@ -540,6 +560,44 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                     @change=${this._entitySwitchChanged}
                   ></ha-switch>
                 </ha-formfield>
+              `
+            : ''
+        }
+        <ha-entity-picker
+          .hass=${this.hass}
+          .label=${localize(this.hass, 'component.bge.editor.extra_value_entity')}
+          .value=${entityConf.extra_value_entity || ''}
+          .helper=${localize(this.hass, 'component.bge.editor.extra_value_entity_helper')}
+          data-index=${this._editingIndex}
+          data-field="extra_value_entity"
+          @value-changed=${this._entityAttributeChanged}
+        ></ha-entity-picker>
+
+        ${
+          entityConf.extra_value_entity
+            ? html`
+                <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_use_entity_name')}>
+                  <ha-switch
+                    .checked=${entityConf.extra_value_name === true}
+                    data-index=${this._editingIndex}
+                    @change=${this._extraValueUseEntityNameChanged}
+                  ></ha-switch>
+                </ha-formfield>
+                ${
+                  entityConf.extra_value_name === true
+                    ? ''
+                    : html`
+                        <ha-input
+                          .label=${localize(this.hass, 'component.bge.editor.extra_value_name')}
+                          .value=${typeof entityConf.extra_value_name === 'string' ? entityConf.extra_value_name : ''}
+                          .helper=${localize(this.hass, 'component.bge.editor.extra_value_name_helper')}
+                          helperPersistent
+                          data-index=${this._editingIndex}
+                          data-field="extra_value_name"
+                          @change=${this._entityAttributeChanged}
+                        ></ha-input>
+                      `
+                }
               `
             : ''
         }
@@ -1038,17 +1096,17 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                       (threshold, index) => html`
                         <div
                           class="entity-container threshold-container ${
-                          this._dropThresholdIndex === index ? 'drag-over' : ''
-                        } ${this._draggedThresholdIndex === index ? 'dragging' : ''}"
+                            this._dropThresholdIndex === index ? 'drag-over' : ''
+                          } ${this._draggedThresholdIndex === index ? 'dragging' : ''}"
                           draggable="true"
                           @dragstart=${(e: DragEvent) => this._handleThresholdDragStart(e, index)}
                           @dragover=${(e: DragEvent) => this._handleThresholdDragOver(e, index)}
                           @dragleave=${() => (this._dropThresholdIndex = null)}
                           @drop=${(e: DragEvent) => this._handleThresholdDrop(e, null)}
                           @dragend=${() => {
-                          this._draggedThresholdIndex = null;
-                          this._dropThresholdIndex = null;
-                        }}
+                            this._draggedThresholdIndex = null;
+                            this._dropThresholdIndex = null;
+                          }}
                         >
                           <div class="drag-handle">
                             <ha-icon icon="mdi:drag-vertical"></ha-icon>

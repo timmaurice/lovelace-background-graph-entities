@@ -36,6 +36,9 @@
   .entity-value {
     align-items: center;
     display: flex;
+    // Overrides the stacked column used on standard rows: a tile row is 34px and already
+    // spends a line on the entity name, so companion values must stay on one line here.
+    flex-direction: row;
     font-size: var(--ha-font-size-s);
     font-weight: var(--ha-font-weight-normal);
     gap: 4px;
@@ -99,10 +102,31 @@
 }
 
 .entity-value {
+  align-items: flex-end;
   color: var(--primary-text-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: var(--ha-line-height-condensed);
   margin-left: auto;
   text-transform: none !important;
   z-index: 1;
+}
+
+// Companion values (graph_entity / extra_value_entity) share one line below the main
+// value, so the row keeps its height while covering far less of the graph.
+.companion-line {
+  display: flex;
+  gap: 4px;
+
+  // The gap replaces the inline margins these carry in tile style.
+  > span {
+    margin-left: 0;
+  }
+
+  > span + span::before {
+    content: '· ';
+  }
 }
 
 %secondary-value-style {
@@ -125,16 +149,14 @@
   @extend %secondary-value-style;
 }
 
-// .extra-value is fed by secondary_value_entity. Styled identically to
-// .secondary-value (the graph_entity secondary display) so both mechanisms
-// render as the same muted, smaller-size footnote next to the main state.
+// Fed by extra_value_entity, styled like .secondary-value so both read the same.
+// The -inline variant stacks under the entity name, so it takes no left margin.
 .extra-value {
   margin-left: 2px;
   @extend %secondary-value-style;
 }
 
 .extra-value-inline {
-  margin-left: 4px;
   @extend %secondary-value-style;
 }
 
@@ -180,6 +202,7 @@
 .entity-with-toggle {
   align-items: center;
   display: flex;
+  flex-direction: row;
   margin-left: auto;
   z-index: 1;
 

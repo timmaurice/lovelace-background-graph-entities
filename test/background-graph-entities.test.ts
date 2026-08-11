@@ -741,7 +741,7 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
-  describe('Independent Secondary Value (secondary_value_entity)', () => {
+  describe('Independent Extra Value (extra_value_entity)', () => {
     beforeEach(() => {
       hass.states['sensor.temperature'] = {
         entity_id: 'sensor.temperature',
@@ -765,7 +765,7 @@ describe('BackgroundGraphEntities', () => {
         entities: [
           {
             entity: 'sensor.temperature',
-            secondary_value_entity: 'sensor.humidity',
+            extra_value_entity: 'sensor.humidity',
           },
         ],
       });
@@ -774,7 +774,7 @@ describe('BackgroundGraphEntities', () => {
 
       const extraValue = element.shadowRoot?.querySelector('.extra-value');
       expect(extraValue).not.toBeNull();
-      expect(extraValue?.textContent?.trim()).toBe('· 54 %');
+      expect(extraValue?.textContent?.trim()).toBe('54 %');
     });
 
     it('should not affect the graphed entity or the click target', async () => {
@@ -783,7 +783,7 @@ describe('BackgroundGraphEntities', () => {
         entities: [
           {
             entity: 'sensor.temperature',
-            secondary_value_entity: 'sensor.humidity',
+            extra_value_entity: 'sensor.humidity',
           },
         ],
       });
@@ -810,8 +810,8 @@ describe('BackgroundGraphEntities', () => {
         entities: [
           {
             entity: 'sensor.temperature',
-            secondary_value_entity: 'sensor.humidity',
-            secondary_value_name: 'Humidity',
+            extra_value_entity: 'sensor.humidity',
+            extra_value_name: 'Humidity',
           },
         ],
       });
@@ -819,16 +819,198 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const extraValue = element.shadowRoot?.querySelector('.extra-value');
-      expect(extraValue?.textContent?.trim()).toBe('· Humidity: 54 %');
+      expect(extraValue?.textContent?.trim()).toBe('Humidity: 54 %');
     });
 
-    it('should display "unavailable" for a missing secondary_value_entity', async () => {
+    it('should use the entity friendly name as label when extra_value_name is true', async () => {
       element.setConfig({
         type: 'custom:background-graph-entities',
         entities: [
           {
             entity: 'sensor.temperature',
-            secondary_value_entity: 'sensor.does_not_exist',
+            extra_value_entity: 'sensor.humidity',
+            extra_value_name: true,
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue?.textContent?.trim()).toBe('Humidity: 54 %');
+    });
+
+    it('should fall back to the entity id when extra_value_name is true without a friendly name', async () => {
+      hass.states['sensor.no_name'] = {
+        entity_id: 'sensor.no_name',
+        state: '7',
+        attributes: {},
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            extra_value_entity: 'sensor.no_name',
+            extra_value_name: true,
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue?.textContent?.trim()).toBe('sensor.no_name: 7');
+    });
+
+    it('should keep the label when the extra entity is unavailable', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            extra_value_entity: 'sensor.does_not_exist',
+            extra_value_name: 'Humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue?.textContent?.trim()).toBe('Humidity: state.default.unavailable');
+    });
+
+    it('should localize an unknown extra value instead of appending a unit', async () => {
+      hass.states['sensor.broken'] = {
+        entity_id: 'sensor.broken',
+        state: 'unknown',
+        attributes: { friendly_name: 'Broken', unit_of_measurement: '%' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            extra_value_entity: 'sensor.broken',
+            extra_value_name: 'Humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue?.textContent?.trim()).toBe('Humidity: state.default.unknown');
+    });
+
+    it('should localize an unavailable extra value instead of appending a unit', async () => {
+      hass.states['sensor.broken'] = {
+        entity_id: 'sensor.broken',
+        state: 'unavailable',
+        attributes: { friendly_name: 'Broken', unit_of_measurement: '%' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.temperature', extra_value_entity: 'sensor.broken' }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue?.textContent?.trim()).toBe('state.default.unavailable');
+    });
+
+    it('should localize an unknown main value instead of appending a unit', async () => {
+      hass.states['sensor.broken'] = {
+        entity_id: 'sensor.broken',
+        state: 'unknown',
+        attributes: { friendly_name: 'Broken', unit_of_measurement: '°C' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.broken' }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const primaryValue = element.shadowRoot?.querySelector('.primary-value');
+      expect(primaryValue?.textContent?.trim()).toBe('state.default.unknown');
+    });
+
+    it('should stack companion values on their own line below the main value', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            extra_value_entity: 'sensor.humidity',
+            value_label: '(peak)',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      // Line 1 keeps the main value and its label; line 2 carries the companion value.
+      const valueLine = element.shadowRoot?.querySelector('.value-line');
+      expect(valueLine?.querySelector('.primary-value')).not.toBeNull();
+      expect(valueLine?.querySelector('.value-label')).not.toBeNull();
+      expect(valueLine?.querySelector('.extra-value')).toBeNull();
+
+      expect(element.shadowRoot?.querySelector('.companion-line .extra-value')).not.toBeNull();
+    });
+
+    it('should display the extra value in tile_style mode', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            extra_value_entity: 'sensor.humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const extraValue = element.shadowRoot?.querySelector('.extra-value');
+      expect(extraValue?.textContent?.trim()).toBe('· 54 %');
+    });
+
+    it('should display the extra value inline on a toggleable row', async () => {
+      hass.states['switch.main'] = {
+        entity_id: 'switch.main',
+        state: 'on',
+        attributes: { friendly_name: 'Main Switch' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'switch.main',
+            extra_value_entity: 'sensor.humidity',
+          },
+        ],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      // Toggleable rows move the value next to the name and drop the middle dot.
+      const extraValue = element.shadowRoot?.querySelector('.extra-value-inline');
+      expect(extraValue).not.toBeNull();
+      expect(extraValue?.textContent?.trim()).toBe('54 %');
+      expect(element.shadowRoot?.querySelector('.extra-value')).toBeNull();
+    });
+
+    it('should display "unavailable" for a missing extra_value_entity', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          {
+            entity: 'sensor.temperature',
+            extra_value_entity: 'sensor.does_not_exist',
           },
         ],
       });
@@ -837,10 +1019,10 @@ describe('BackgroundGraphEntities', () => {
 
       const extraValue = element.shadowRoot?.querySelector('.extra-value');
       expect(extraValue).not.toBeNull();
-      expect(extraValue?.textContent?.trim()).toBe('· state.default.unavailable');
+      expect(extraValue?.textContent?.trim()).toBe('state.default.unavailable');
     });
 
-    it('should not display an extra value when secondary_value_entity is not defined', async () => {
+    it('should not display an extra value when extra_value_entity is not defined', async () => {
       element.setConfig({
         type: 'custom:background-graph-entities',
         entities: [{ entity: 'sensor.temperature' }],
@@ -865,17 +1047,17 @@ describe('BackgroundGraphEntities', () => {
             entity: 'sensor.temperature',
             graph_entity: 'sensor.power',
             show_graph_entity_state: true,
-            secondary_value_entity: 'sensor.humidity',
+            extra_value_entity: 'sensor.humidity',
           },
         ],
       });
       element.hass = hass;
       await element.updateComplete;
 
-      const secondaryValue = element.shadowRoot?.querySelector('.secondary-value');
-      const extraValue = element.shadowRoot?.querySelector('.extra-value');
-      expect(secondaryValue?.textContent?.trim()).toBe('· 42 W');
-      expect(extraValue?.textContent?.trim()).toBe('· 54 %');
+      // Both companions share the single line below the main value.
+      const companionLine = element.shadowRoot?.querySelector('.companion-line');
+      expect(companionLine?.querySelector('.secondary-value')?.textContent?.trim()).toBe('42 W');
+      expect(companionLine?.querySelector('.extra-value')?.textContent?.trim()).toBe('54 %');
     });
   });
 

@@ -237,7 +237,7 @@ test.describe('Background Graph Entities', () => {
     // Verify alternative state is rendered (.secondary-value)
     const secondaryValue = row.locator('.secondary-value');
     await expect(secondaryValue).toBeVisible();
-    await expect(secondaryValue).toHaveText('· 45 %');
+    await expect(secondaryValue).toHaveText('45 %');
 
     await page.screenshot({
       path: 'test/e2e/screenshots/5_overrides.png',
@@ -263,6 +263,94 @@ test.describe('Background Graph Entities', () => {
 
     await page.screenshot({
       path: 'test/e2e/screenshots/6_toggles.png',
+    });
+  });
+
+  test('7. Independent Extra Value', async ({ page }) => {
+    await setupCard(page, {
+      title: 'Extra Value Test',
+      entities: [
+        { entity: 'sensor.bedroom', extra_value_entity: 'sensor.humidity' },
+        { entity: 'sensor.living_room', extra_value_entity: 'sensor.humidity', extra_value_name: true },
+        { entity: 'sensor.outside', extra_value_entity: 'sensor.humidity', extra_value_name: 'Hum' },
+        { entity: 'switch.ac', name: 'AC Toggle', extra_value_entity: 'sensor.humidity' },
+      ],
+    });
+
+    const cardElement = page.locator('background-graph-entities');
+    await expect(cardElement).toBeVisible();
+
+    const rows = cardElement.locator('.entity-row');
+
+    // Bare value, friendly name as label, and a custom label.
+    await expect(rows.nth(0).locator('.extra-value')).toHaveText('45 %');
+    await expect(rows.nth(1).locator('.extra-value')).toHaveText('Humidity: 45 %');
+    await expect(rows.nth(2).locator('.extra-value')).toHaveText('Hum: 45 %');
+
+    // The main value is untouched by the extra value.
+    await expect(rows.nth(0).locator('.primary-value')).toHaveText('25.54 °C');
+
+    // Standard rows stack the companion value under the main value.
+    await expect(rows.nth(0).locator('.entity-value')).toHaveCSS('flex-direction', 'column');
+
+    // Toggleable rows render the extra value inline next to the name, with no middle dot.
+    const toggleRow = rows.nth(3);
+    await expect(toggleRow.locator('.extra-value-inline')).toHaveText('45 %');
+    await expect(toggleRow.locator('.extra-value')).toHaveCount(0);
+
+    // The graph still belongs to the main entity, not to the extra value entity.
+    await expect(rows.nth(0).locator('.graph-container')).toHaveAttribute('data-entity-id', 'sensor.bedroom');
+
+    // Clicking the row opens more-info for the main entity, not the extra value entity.
+    await page.evaluate(() => {
+      (window as unknown as { __moreInfo?: string }).__moreInfo = undefined;
+      document.addEventListener('hass-more-info', (ev) => {
+        (window as unknown as { __moreInfo?: string }).__moreInfo = (
+          ev as CustomEvent<{ entityId: string }>
+        ).detail.entityId;
+      });
+    });
+    await rows.nth(0).click();
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __moreInfo?: string }).__moreInfo))
+      .toBe('sensor.bedroom');
+
+    await page.screenshot({
+      path: 'test/e2e/screenshots/7_extra_value.png',
+    });
+  });
+
+  test('8. Tile Style With Extra Value', async ({ page }) => {
+    await setupCard(page, {
+      title: 'Tile Extra Value',
+      tile_style: true,
+      entities: [
+        { entity: 'sensor.bedroom', extra_value_entity: 'sensor.humidity' },
+        { entity: 'sensor.living_room', extra_value_entity: 'sensor.humidity', extra_value_name: 'Hum' },
+      ],
+    });
+
+    const cardElement = page.locator('background-graph-entities');
+    await expect(cardElement).toBeVisible();
+
+    const rows = cardElement.locator('.entity-row');
+
+    // A tile row is 34px and already spends a line on the name, so the value and its
+    // companion must stay side by side rather than stacking as they do on standard rows.
+    await expect(rows.nth(0).locator('.entity-value')).toHaveCSS('flex-direction', 'row');
+    await expect(rows.nth(0).locator('.extra-value')).toHaveText('· 45 %');
+    await expect(rows.nth(1).locator('.extra-value')).toHaveText('· Hum: 45 %');
+
+    // Everything has to fit the fixed tile row height.
+    for (const i of [0, 1]) {
+      const box = await rows.nth(i).boundingBox();
+      expect(box?.height).toBe(34);
+      const valueBox = await rows.nth(i).locator('.entity-value').boundingBox();
+      expect(valueBox!.y + valueBox!.height).toBeLessThanOrEqual(box!.y + box!.height + 1);
+    }
+
+    await page.screenshot({
+      path: 'test/e2e/screenshots/8_tile_extra_value.png',
     });
   });
 });
