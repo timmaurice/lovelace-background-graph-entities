@@ -592,39 +592,45 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       return html`
         <div
           class="entity-row ${showIcon ? '' : 'no-icon'}"
-          style=${iconColor
-            ? `--bge-icon-color: ${iconColor};${autoIconColor ? ` --state-active-color: ${autoIconColor};` : ''}`
-            : ''}
+          style=${
+            iconColor
+              ? `--bge-icon-color: ${iconColor};${autoIconColor ? ` --state-active-color: ${autoIconColor};` : ''}`
+              : ''
+          }
           @click=${() => this._openEntityPopup(entityConfig.entity)}
         >
-          ${showIcon
-            ? html`
-                <div
-                  class="icon-container ${isBooleanState ? (isActive ? 'active' : 'inactive') : ''}"
-                  role=${isToggleable ? 'button' : 'img'}
-                  aria-label=${isToggleable ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
-                  aria-pressed=${isToggleable ? isActive : 'false'}
-                  tabindex=${isToggleable ? '0' : '-1'}
-                  @click=${(e: Event) => {
-                    if (isToggleable) {
-                      e.stopPropagation();
-                      this._toggleEntity(entityConfig.entity);
+          ${
+            showIcon
+              ? html`
+                  <div
+                    class="icon-container ${isBooleanState ? (isActive ? 'active' : 'inactive') : ''}"
+                    role=${isToggleable ? 'button' : 'img'}
+                    aria-label=${isToggleable ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
+                    aria-pressed=${isToggleable ? isActive : 'false'}
+                    tabindex=${isToggleable ? '0' : '-1'}
+                    @click=${(e: Event) => {
+                      if (isToggleable) {
+                        e.stopPropagation();
+                        this._toggleEntity(entityConfig.entity);
+                      }
+                    }}
+                    @keydown=${isToggleable ? handleKeyboardToggle : null}
+                  >
+                    ${
+                      entityConfig.icon
+                        ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
+                        : html`<ha-state-icon
+                            class="entity-icon"
+                            .hass=${this.hass}
+                            .stateObj=${stateObj}
+                            .stateColor=${isTileStyle && !autoIconColor}
+                            style=${iconStyle}
+                          ></ha-state-icon>`
                     }
-                  }}
-                  @keydown=${isToggleable ? handleKeyboardToggle : null}
-                >
-                  ${entityConfig.icon
-                    ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
-                    : html`<ha-state-icon
-                        class="entity-icon"
-                        .hass=${this.hass}
-                        .stateObj=${stateObj}
-                        .stateColor=${isTileStyle && !autoIconColor}
-                        style=${iconStyle}
-                      ></ha-state-icon>`}
-                </div>
-              `
-            : ''}
+                  </div>
+                `
+              : ''
+          }
           <div class="entity-info">
             <div class="entity-name">
               ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
@@ -643,48 +649,58 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     return html`
       <div class="entity-row ${showIcon ? '' : 'no-icon'}" @click=${() => this._openEntityPopup(entityConfig.entity)}>
-        ${showIcon
-          ? entityConfig.icon
-            ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
-            : html`<ha-state-icon
-                class="entity-icon"
-                .hass=${this.hass}
-                .stateObj=${stateObj}
-                .stateColor=${isTileStyle && !autoIconColor}
-                style=${iconStyle}
-              ></ha-state-icon>`
-          : ''}
+        ${
+          showIcon
+            ? entityConfig.icon
+              ? html`<ha-icon class="entity-icon" .icon=${entityConfig.icon} style=${iconStyle}></ha-icon>`
+              : html`<ha-state-icon
+                  class="entity-icon"
+                  .hass=${this.hass}
+                  .stateObj=${stateObj}
+                  .stateColor=${isTileStyle && !autoIconColor}
+                  style=${iconStyle}
+                ></ha-state-icon>`
+            : ''
+        }
         <div class="entity-name">
           ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
-          ${isToggleable && !isTileStyle && secondaryDisplayValue
-            ? html`<span class="secondary-value-inline">${secondaryDisplayValue}</span>`
-            : ''}
-          ${isToggleable && !isTileStyle && extraDisplayValue
-            ? html`<span class="secondary-value-inline">${extraDisplayValue}</span>`
-            : ''}
+          ${
+            isToggleable && !isTileStyle && secondaryDisplayValue
+              ? html`<span class="secondary-value-inline">${secondaryDisplayValue}</span>`
+              : ''
+          }
+          ${
+            isToggleable && !isTileStyle && extraDisplayValue
+              ? html`<span class="secondary-value-inline">${extraDisplayValue}</span>`
+              : ''
+          }
         </div>
         <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
-        ${isToggleable && !isTileStyle
-          ? html`
-              <div class="entity-value entity-with-toggle">
-                <ha-switch
-                  aria-label=${`Toggle ${entityConfig.name || entityConfig.entity}`}
-                  .checked=${stateObj.state === 'on'}
-                  @click=${(e: Event) => {
-                    e.stopPropagation();
-                    this._toggleEntity(entityConfig.entity);
-                  }}
-                ></ha-switch>
-              </div>
-            `
-          : html`<div class="entity-value">
-              <span class="primary-value">${displayValue}</span>
-              ${valueLabel ? html`<span class="value-label">${valueLabel}</span>` : ''}
-              ${!isToggleable && secondaryDisplayValue
-                ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
-                : ''}
-              ${!isToggleable && extraDisplayValue ? html`<span class="extra-value">· ${extraDisplayValue}</span>` : ''}
-            </div>`}
+        ${
+          isToggleable && !isTileStyle
+            ? html`
+                <div class="entity-value entity-with-toggle">
+                  <ha-switch
+                    aria-label=${`Toggle ${entityConfig.name || entityConfig.entity}`}
+                    .checked=${stateObj.state === 'on'}
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      this._toggleEntity(entityConfig.entity);
+                    }}
+                  ></ha-switch>
+                </div>
+              `
+            : html`<div class="entity-value">
+                <span class="primary-value">${displayValue}</span>
+                ${valueLabel ? html`<span class="value-label">${valueLabel}</span>` : ''}
+                ${
+                  !isToggleable && secondaryDisplayValue
+                    ? html`<span class="secondary-value">· ${secondaryDisplayValue}</span>`
+                    : ''
+                }
+                ${!isToggleable && extraDisplayValue ? html`<span class="extra-value">· ${extraDisplayValue}</span>` : ''}
+              </div>`
+        }
       </div>
     `;
   }
@@ -1004,18 +1020,20 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     return html`
       <ha-card>
-        ${title || averageSuffix
-          ? html`
-              <div class="card-header">
-                <div class="name">${title}</div>
-                <div class="value">${averageSuffix}</div>
-              </div>
-            `
-          : ''}
+        ${
+          title || averageSuffix
+            ? html`
+                <div class="card-header">
+                  <div class="name">${title}</div>
+                  <div class="value">${averageSuffix}</div>
+                </div>
+              `
+            : ''
+        }
         <div
-          class="card-content ${this._config.tile_style ? 'tile' : ''} ${this._config.line_length === 'short'
-            ? 'short'
-            : ''}"
+          class="card-content ${this._config.tile_style ? 'tile' : ''} ${
+            this._config.line_length === 'short' ? 'short' : ''
+          }"
         >
           ${sortedEntities.map((entity) => this._renderEntityRow(entity))}
         </div>
