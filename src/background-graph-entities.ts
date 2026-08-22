@@ -784,10 +784,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       });
     }
 
-    if (processedHistory.length < 2) {
+    // Only finite points can be drawn. Gap markers (NaN, from `show_gaps`) are
+    // skipped by the line generator below and must not be counted here, or an
+    // all-gap series would produce an empty path and a NaN y-domain.
+    if (processedHistory.filter((d) => Number.isFinite(d.value)).length < 2) {
       return; // Not enough points to draw a line
     }
 
+    // `extent` ignores non-finite values, so this is the range of the real data.
     const yDomain = extent(processedHistory, (d) => d.value) as [number, number];
 
     // Determine min and max from config, with entity override
@@ -830,6 +834,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const strokeColor = this._setupGradient(svg, yScale, gradientId, entityConfig);
 
     const lineGenerator = d3Line<{ timestamp: Date; value: number }>()
+      .defined((d) => Number.isFinite(d.value))
       .x((d) => xScale(d.timestamp))
       .y((d) => yScale(d.value))
       .curve(this._getCurveFactory());
@@ -866,8 +871,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       .attr('stroke-width', lineWidth);
 
     // The first point in history is an anchor at the start time, not a bucket.
-    // We only want to show dots for the actual data buckets.
-    const dotData = history.slice(1);
+    // We only want to show dots for the actual data buckets. Gap markers have no
+    // position on the y-axis, so they are skipped rather than drawn at NaN.
+    const dotData = history.slice(1).filter((d) => Number.isFinite(d.value));
     if (this.editMode) {
       svg
         .selectAll('.graph-dot')
@@ -945,15 +951,18 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         return { raw: [], downsampled: [] };
       }
 
-      const finalStates = states
-        .map((s) => {
-          let value: number;
-          if (s.s === 'on') value = 1;
-          else if (s.s === 'off') value = 0;
-          else value = Number(s.s);
-          return { timestamp: new Date(s.lu * MS_IN_S), value };
-        })
-        .filter((s) => !isNaN(s.value));
+      // With `show_gaps` enabled, non-numeric states (`unavailable`/`unknown`) are
+      // kept as NaN so the graph can render a break for them. Otherwise they are
+      // dropped, which makes the line carry the last known value across the outage.
+      const showGaps = this._config?.show_gaps === true;
+      const mappedStates = states.map((s) => {
+        let value: number;
+        if (s.s === 'on') value = 1;
+        else if (s.s === 'off') value = 0;
+        else value = Number(s.s);
+        return { timestamp: new Date(s.lu * MS_IN_S), value };
+      });
+      const finalStates = showGaps ? mappedStates : mappedStates.filter((s) => !isNaN(s.value));
       const downsampled = downsampleHistory(finalStates, hoursToShow, pointsPerHour);
       return { raw: finalStates, downsampled };
     } catch (err) {

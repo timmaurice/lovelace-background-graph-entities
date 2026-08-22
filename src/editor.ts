@@ -1022,6 +1022,14 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           ></ha-switch>
         </ha-formfield>
 
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_gaps')}>
+          <ha-switch
+            .checked=${this._config.show_gaps === true}
+            .configValue=${'show_gaps'}
+            @change=${this._valueChanged}
+          ></ha-switch>
+        </ha-formfield>
+
         ${this._renderGraphBoundsEditor(this._config, this._valueChanged)}
 
         <div class="opacity-slider-container">

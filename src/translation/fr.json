@@ -17,6 +17,7 @@
     "line_color": "Couleur de la ligne",
     "line_opacity": "Opacité de la ligne",
     "line_glow": "Effet de lueur",
+    "show_gaps": "Afficher les coupures si indisponible",
     "color_mode": "Mode de couleur",
     "color_modes": {
       "single": "Couleur unique",

@@ -26,6 +26,20 @@ const setupDemos = async () => {
     return data.reverse();
   };
 
+  // Deterministic history containing an `unavailable` stretch, so the two
+  // `show_gaps` examples always compare the exact same data.
+  const generateFlakyHistory = () => {
+    const data = [];
+    for (let hoursAgo = 24; hoursAgo >= 0; hoursAgo--) {
+      const isOutage = hoursAgo <= 16 && hoursAgo >= 11;
+      data.push({
+        s: isOutage ? 'unavailable' : (22 + Math.sin((24 - hoursAgo) / 3) * 1.8).toFixed(1),
+        lu: now - hoursAgo * 3600,
+      });
+    }
+    return data;
+  };
+
   const mockHass = {
     ...mockHassBase,
     callWS: async () => ({
@@ -34,6 +48,7 @@ const setupDemos = async () => {
       'sensor.outside': generateHistory(mockHassBase.states['sensor.outside'].state, 1.5),
       'sensor.humidity': generateHistory(mockHassBase.states['sensor.humidity'].state, 2),
       'switch.ac': generateHistory(1, 0),
+      'sensor.flaky_probe': generateFlakyHistory(),
     }),
     callService: async (domain, service, serviceData) => {
       console.log(`Called service ${domain}.${service}`, serviceData);
