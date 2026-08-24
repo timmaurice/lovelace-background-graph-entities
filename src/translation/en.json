@@ -17,6 +17,7 @@
     "line_color": "Line Color",
     "line_opacity": "Line Opacity",
     "line_glow": "Line Glow",
+    "show_gaps": "Show Gaps for Unavailable",
     "color_mode": "Color Mode",
     "color_modes": {
       "single": "Single Color",

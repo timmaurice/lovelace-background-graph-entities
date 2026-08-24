@@ -108,6 +108,7 @@ export interface BackgroundGraphEntitiesConfig extends LovelaceCardConfig {
   color_thresholds?: ColorThreshold[];
   curve?: 'spline' | 'linear' | 'natural' | 'step';
   line_glow?: boolean;
+  show_gaps?: boolean;
   tile_style?: boolean;
   graph_min?: number;
   graph_max?: number;

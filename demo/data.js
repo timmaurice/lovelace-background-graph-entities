@@ -29,6 +29,13 @@ export const mockHassBase = {
       state: 'on',
       attributes: { friendly_name: 'Air Conditioner' },
     },
+    // A sensor whose history contains an `unavailable` stretch, used by the
+    // `show_gaps` examples below.
+    'sensor.flaky_probe': {
+      entity_id: 'sensor.flaky_probe',
+      state: '22.0',
+      attributes: { friendly_name: 'Flaky Probe', unit_of_measurement: '°C' },
+    },
   },
   entities: {
     'sensor.bedroom': { entity_id: 'sensor.bedroom', icon: 'mdi:bed' },
@@ -36,6 +43,7 @@ export const mockHassBase = {
     'sensor.outside': { entity_id: 'sensor.outside', icon: 'mdi:thermometer' },
     'sensor.humidity': { entity_id: 'sensor.humidity', icon: 'mdi:water-percent' },
     'switch.ac': { entity_id: 'switch.ac', icon: 'mdi:air-conditioner' },
+    'sensor.flaky_probe': { entity_id: 'sensor.flaky_probe', icon: 'mdi:thermometer-alert' },
   },
 };
 
@@ -174,6 +182,37 @@ export const demoConfigs = [
           auto_icon_color_source: 'min',
         },
       ],
+    },
+  },
+  {
+    name: 'Unavailable States: Default',
+    description:
+      'The Flaky Probe was unavailable for 6 hours in the middle of the window. By default the line holds the last known value across it, which reads as a flat measurement that never actually happened.',
+    config: {
+      type: 'custom:background-graph-entities',
+      title: 'show_gaps: false (default)',
+      hours_to_show: 24,
+      points_per_hour: 1,
+      curve: 'linear',
+      line_width: 4,
+      line_opacity: 0.4,
+      entities: ['sensor.flaky_probe'],
+    },
+  },
+  {
+    name: 'Unavailable States: show_gaps',
+    description:
+      'The exact same history with show_gaps enabled. The line breaks for the unavailable stretch instead of inventing a value for it.',
+    config: {
+      type: 'custom:background-graph-entities',
+      title: 'show_gaps: true',
+      hours_to_show: 24,
+      points_per_hour: 1,
+      curve: 'linear',
+      line_width: 4,
+      line_opacity: 0.4,
+      show_gaps: true,
+      entities: ['sensor.flaky_probe'],
     },
   },
   {

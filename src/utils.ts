@@ -7,6 +7,11 @@ export const MS_IN_H = MIN_IN_H * S_IN_MIN * MS_IN_S;
 
 /**
  * Downsamples historical data into evenly spaced buckets using a time-weighted average.
+ *
+ * Samples with a non-finite value represent `unavailable`/`unknown` periods (the
+ * card only produces them when `show_gaps` is enabled). They are excluded from
+ * the average, and a bucket dominated by them is emitted as `NaN` so the graph
+ * can be drawn with a break instead of a flat carried-forward line.
  */
 export function downsampleHistory(
   states: { timestamp: Date; value: number }[],
@@ -37,7 +42,8 @@ export function downsampleHistory(
     const bucketStartTime = startTime.getTime() + i * interval;
     const bucketEndTime = bucketStartTime + interval;
     let weightedSum = 0;
-    let totalDurationInBucket = 0;
+    let validDuration = 0;
+    let invalidDuration = 0;
 
     // Iterate through all state changes to calculate their weighted contribution to this bucket.
     for (let k = 0; k < statesWithEndpoints.length - 1; k++) {
@@ -50,14 +56,30 @@ export function downsampleHistory(
 
       if (start < end) {
         const duration = end - start;
-        weightedSum += currentState.value * duration;
-        totalDurationInBucket += duration;
+        // A non-finite value marks an `unavailable`/`unknown` period, which only
+        // reaches this function when `show_gaps` is enabled. Its duration is
+        // tracked separately so it can never poison the average with NaN.
+        if (Number.isFinite(currentState.value)) {
+          weightedSum += currentState.value * duration;
+          validDuration += duration;
+        } else {
+          invalidDuration += duration;
+        }
       }
     }
 
+    const totalDurationInBucket = validDuration + invalidDuration;
+
     if (totalDurationInBucket > 0) {
-      valueForBucket = weightedSum / totalDurationInBucket;
+      // A bucket that spends most of its time in an invalid state becomes a gap.
+      // A minority sliver of invalid time is ignored, so a single blip cannot
+      // punch a hole in an otherwise continuous line. When nothing is invalid
+      // this reduces to the original time-weighted average.
+      valueForBucket = invalidDuration > validDuration ? NaN : weightedSum / validDuration;
       // Find the last actual value at or before the end of this bucket to carry forward.
+      // A NaN is carried forward on purpose: if the entity was last seen unavailable,
+      // a following empty bucket is still inside that outage. (`??` only guards
+      // null/undefined, so a NaN found here is kept, which is what we want.)
       lastValue = states.filter((s) => s.timestamp.getTime() <= bucketEndTime).pop()?.value ?? lastValue;
     } else {
       // If the bucket is empty, use the last known value.

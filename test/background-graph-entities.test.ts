@@ -1270,6 +1270,180 @@ describe('BackgroundGraphEntities', () => {
       const result = downsampleHistory(states, hoursToShow, pointsPerHour);
       expect(result).toEqual([]);
     });
+
+    it('should emit NaN for a bucket mostly spent in an invalid state', () => {
+      const states = [
+        { timestamp: startTime, value: 5 }, // 10:00
+        { timestamp: new Date('2023-01-01T10:10:00Z'), value: NaN }, // unavailable from 10:10
+        { timestamp: new Date('2023-01-01T10:40:00Z'), value: 20 }, // recovers at 10:40
+      ];
+
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      // Bucket 1 (10:00-10:30): 10 min valid, 20 min invalid → gap.
+      expect(result[1].value).toBeNaN();
+      // Bucket 2 (10:30-11:00): 10 min invalid, 20 min valid → average of the valid part only.
+      expect(result[2].value).toBeCloseTo(20);
+      expect(result[3].value).toBe(20);
+    });
+
+    it('should ignore a minority sliver of invalid time in a bucket', () => {
+      const states = [
+        { timestamp: startTime, value: 10 }, // 10:00
+        { timestamp: new Date('2023-01-01T10:25:00Z'), value: NaN }, // only the last 5 min of bucket 1
+        { timestamp: new Date('2023-01-01T10:30:00Z'), value: 12 },
+      ];
+
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      // 25 min valid vs 5 min invalid → no gap, average taken from the valid part.
+      expect(result[1].value).toBeCloseTo(10);
+      expect(result[2].value).toBeCloseTo(12);
+    });
+
+    it('should emit consecutive NaN buckets for a multi-bucket outage and recover after it', () => {
+      const states = [
+        { timestamp: startTime, value: 5 }, // 10:00
+        { timestamp: new Date('2023-01-01T10:10:00Z'), value: NaN }, // unavailable for ~90 min
+        { timestamp: new Date('2023-01-01T11:40:00Z'), value: 40 },
+      ];
+
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      expect(result[0]).toEqual({ timestamp: startTime, value: 5 });
+      expect(result[1].value).toBeNaN(); // 10:00-10:30, mostly invalid
+      expect(result[2].value).toBeNaN(); // 10:30-11:00, fully invalid
+      expect(result[3].value).toBeNaN(); // 11:00-11:30, fully invalid
+      expect(result[4].value).toBeCloseTo(40); // 11:30-12:00, 20 of 30 min valid
+    });
+
+    it('should produce a NaN anchor when the window opens mid-outage', () => {
+      const states = [
+        { timestamp: startTime, value: NaN }, // already unavailable at 10:00
+        { timestamp: new Date('2023-01-01T11:00:00Z'), value: 30 },
+      ];
+
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      expect(result[0].value).toBeNaN();
+      expect(result[1].value).toBeNaN();
+      expect(result[2].value).toBeNaN();
+      expect(result[3].value).toBe(30);
+      expect(result[4].value).toBe(30);
+    });
+  });
+
+  describe('Gaps for unavailable states (show_gaps)', () => {
+    const mockNow = new Date('2023-01-01T12:00:00Z');
+
+    // At hours_to_show: 2 / points_per_hour: 2 this yields four 30-minute buckets:
+    //   bucket 1 (10:00-10:30): 10 for 10 min, 12 for 20 min       → 11.33
+    //   bucket 2 (10:30-11:00): 10 min valid, 20 min unavailable    → gap
+    //   bucket 3 (11:00-11:30): 20 min unavailable, 10 min valid    → gap
+    //   bucket 4 (11:30-12:00): 20 for 10 min, 22 for 20 min        → 21.33
+    const buildHistory = (): { lu: number; s: string }[] => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      return [
+        { lu: startTime.getTime() / 1000, s: '10' },
+        { lu: new Date('2023-01-01T10:10:00Z').getTime() / 1000, s: '12' },
+        { lu: new Date('2023-01-01T10:40:00Z').getTime() / 1000, s: 'unavailable' },
+        { lu: new Date('2023-01-01T11:20:00Z').getTime() / 1000, s: '20' },
+        { lu: new Date('2023-01-01T11:40:00Z').getTime() / 1000, s: '22' },
+      ];
+    };
+
+    const gapConfig = { hours_to_show: 2, points_per_hour: 2, curve: 'linear' as const };
+
+    const renderPath = async (extraConfig: Partial<BackgroundGraphEntitiesConfig>): Promise<Element | null> => {
+      element.hass = hass;
+      element.setConfig({ ...config, ...gapConfig, ...extraConfig });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+      return element.shadowRoot?.querySelector('.graph-path') ?? null;
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should break the line into separate segments when show_gaps is enabled', async () => {
+      const path = await renderPath({ show_gaps: true });
+
+      expect(path, 'Graph path should exist').not.toBeNull();
+      const d = path?.getAttribute('d');
+      expect(d).not.toBeNull();
+      // Each contiguous run of defined points starts a new "moveto" command.
+      expect(d?.match(/M/g)).toHaveLength(2);
+    });
+
+    it('should draw one continuous line for the same history by default', async () => {
+      const path = await renderPath({});
+
+      expect(path, 'Graph path should exist').not.toBeNull();
+      const d = path?.getAttribute('d');
+      expect(d).not.toBeNull();
+      expect(d?.match(/M/g)).toHaveLength(1);
+    });
+
+    it('should break the glow paths at the same gaps', async () => {
+      await renderPath({ show_gaps: true, line_glow: true });
+
+      const glowOuter = element.shadowRoot?.querySelector('.graph-path-glow-outer');
+      const glowInner = element.shadowRoot?.querySelector('.graph-path-glow-inner');
+      expect(glowOuter?.getAttribute('d')?.match(/M/g)).toHaveLength(2);
+      expect(glowInner?.getAttribute('d')?.match(/M/g)).toHaveLength(2);
+    });
+
+    it('should render no graph at all when the entity was never available', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [
+          { lu: startTime.getTime() / 1000, s: 'unavailable' },
+          { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: 'unknown' },
+        ],
+      });
+
+      const path = await renderPath({ show_gaps: true });
+
+      expect(path, 'No path should be drawn for an all-gap series').toBeNull();
+      expect(element.shadowRoot?.querySelector('svg'), 'No svg should be created').toBeNull();
+    });
+
+    it('should still resolve value_source from the valid samples only', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        ...gapConfig,
+        show_gaps: true,
+        entities: [{ entity: 'sensor.test', value_source: 'max' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      // Max of the finite raw samples (10, 12, 20, 22) — the gap markers are ignored.
+      expect(element.shadowRoot?.querySelector('.primary-value')?.textContent).toContain('22');
+    });
+
+    it('should not render edit-mode dots for gap markers', async () => {
+      element.editMode = true;
+      await renderPath({ show_gaps: true });
+
+      const dots = element.shadowRoot?.querySelectorAll('.graph-dot');
+      expect(dots?.length).toBeGreaterThan(0);
+      dots?.forEach((dot) => {
+        expect(Number(dot.getAttribute('cy'))).not.toBeNaN();
+      });
+    });
   });
 
   describe('Auto Icon Color Feature', () => {
