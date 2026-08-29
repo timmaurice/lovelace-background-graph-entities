@@ -76,10 +76,15 @@ export interface EntityConfig {
   auto_icon_color_source?: 'latest' | 'max' | 'min' | 'avg' | 'median';
   value_source?: 'latest' | 'max' | 'min' | 'avg' | 'median';
   value_label?: string;
+  value_transform?: string;
+  // false suppresses the unit entirely
+  value_unit?: string | false;
   graph_entity?: string;
   show_graph_entity_state?: boolean;
   extra_value_entity?: string;
   extra_value_name?: string | boolean;
+  extra_value_transform?: string;
+  extra_value_unit?: string | false;
   overwrite_graph_appearance?: boolean;
   line_color?: string;
   line_opacity?: number;

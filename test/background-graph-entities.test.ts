@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock, beforeAll } from 'vitest';
 import { HomeAssistant, BackgroundGraphEntitiesConfig } from '../src/types';
 import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../src/background-graph-entities';
-import { downsampleHistory, formatNumber } from '../src/utils';
+import { compileValueTransform, downsampleHistory, formatNumber } from '../src/utils';
 
 // Mock console.info before the module is imported to prevent version logging.
 vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -1840,6 +1840,511 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Value Transform / Unit Override Feature', () => {
+    const mockNow = new Date('2023-01-01T11:30:00Z');
+
+    // Same history as the Value Source block: raw values [30, 100, 10],
+    // downsampled at 1 point/hour → [30, 65, 55].
+    const buildHistory = (): { lu: number; s: string }[] => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      return [
+        { lu: startTime.getTime() / 1000, s: '30' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '100' },
+        { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '10' },
+      ];
+    };
+
+    const transformWarnings = (spy: ReturnType<typeof vi.spyOn>): unknown[][] =>
+      spy.mock.calls.filter((call: unknown[]) => String(call[0]).includes('value_transform'));
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should apply value_transform to the displayed latest value and keep the entity unit', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_transform: 'x * 2' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('246 °C');
+    });
+
+    it('should apply the unit override with precision inferred from the raw state string', async () => {
+      hass.states['sensor.wan'] = {
+        entity_id: 'sensor.wan',
+        state: '12.5',
+        attributes: { friendly_name: 'WAN', unit_of_measurement: 'kB/s' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.wan', value_transform: 'x * 8', value_unit: 'kb/s' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      // Precision comes from the raw state "12.5" (1 decimal), not the transformed number.
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('100.0 kb/s');
+    });
+
+    it('should apply the transform before max aggregation', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_source: 'max', value_transform: 'x * 2' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      // Raw history [30, 100, 10] × 2 → max 200.
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('200 °C');
+    });
+
+    it('should aggregate over transformed samples for a decreasing transform', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_source: 'max', value_transform: '0 - x' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      // Raw [30, 100, 10] → [-30, -100, -10]: the max is -10, not the
+      // transformed raw max (-100). Proves transform-then-aggregate.
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('-10 °C');
+    });
+
+    it('should scale the graph y-domain by the transform', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test', value_transform: 'x * 8' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+
+      // Downsampled [30, 65, 55] × 8 → extent [240, 520], 10% padding → [212, 548].
+      expect(scaleLinear).toHaveBeenCalled();
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([212, 548]);
+    });
+
+    it('should evaluate auto_icon_color thresholds in transformed units', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      const historyData = [
+        { lu: startTime.getTime() / 1000, s: '0' },
+        { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '60' },
+      ];
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': historyData });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        color_thresholds: [
+          { value: 0, color: '#00ff00' },
+          { value: 100, color: '#ff0000' },
+        ],
+        entities: [{ entity: 'sensor.test', auto_icon_color: true, value_transform: 'x * 2' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+      await element.updateComplete;
+
+      // Latest downsampled value 60 × 2 = 120 ≥ threshold 100 → pure red.
+      // Untransformed 60 would interpolate between green and red instead.
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
+    });
+
+    it('should sort by transformed value', async () => {
+      hass.states['sensor.temp_a'] = {
+        entity_id: 'sensor.temp_a',
+        state: '15.5',
+        attributes: { friendly_name: 'Z Temperature' },
+      };
+      hass.states['sensor.temp_b'] = {
+        entity_id: 'sensor.temp_b',
+        state: '35.2',
+        attributes: { friendly_name: 'A Temperature' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.temp_a', value_transform: 'x * 10' }, 'sensor.temp_b'],
+        sort: { method: 'value', numeric: true, reverse: false },
+      });
+      await element.updateComplete;
+
+      // 15.5 × 10 = 155 outranks 35.2, inverting the raw order.
+      const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      expect(names).toEqual(['A Temperature', 'Z Temperature']);
+    });
+
+    it('should include transformed values and overridden units in the title average', async () => {
+      hass.states['sensor.test1'] = {
+        entity_id: 'sensor.test1',
+        state: '10',
+        attributes: { unit_of_measurement: 'kB/s' },
+      };
+      hass.states['sensor.test2'] = {
+        entity_id: 'sensor.test2',
+        state: '20',
+        attributes: { unit_of_measurement: 'kb/s' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test1', value_transform: 'x * 8', value_unit: 'kb/s' }, 'sensor.test2'],
+        average_in_title: true,
+      });
+      await element.updateComplete;
+
+      // (10 × 8 + 20) / 2 = 50; the override makes both units kb/s, so it's shown.
+      const header = element.shadowRoot?.querySelector('.card-header');
+      expect(header?.querySelector('.value')?.textContent?.trim()).toBe('50 kb/s');
+    });
+
+    it('should key the minutes formatting off the effective unit', async () => {
+      hass.states['sensor.duration_s'] = {
+        entity_id: 'sensor.duration_s',
+        state: '4500',
+        attributes: { unit_of_measurement: 's' },
+      };
+      hass.states['sensor.duration_min'] = {
+        entity_id: 'sensor.duration_min',
+        state: '75',
+        attributes: { unit_of_measurement: 'min' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          // Overriding *to* min opts into hours/minutes formatting of the transformed number
+          { entity: 'sensor.duration_s', value_transform: 'x / 60', value_unit: 'min' },
+          // Overriding *away* from min opts out of it
+          { entity: 'sensor.duration_min', value_unit: 'm' },
+        ],
+      });
+      await element.updateComplete;
+
+      const values = Array.from(element.shadowRoot?.querySelectorAll('.primary-value') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      expect(values).toEqual(['1h 15min', '75 m']);
+    });
+
+    it('should fall back untransformed and warn once for a throwing expression', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_transform: 'x.foo.bar' }],
+      });
+      await element.updateComplete;
+
+      // Force additional renders; the warning must not repeat.
+      element.hass = { ...hass };
+      await element.updateComplete;
+      element.hass = { ...hass };
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('123 °C');
+      expect(transformWarnings(warnSpy)).toHaveLength(1);
+      warnSpy.mockRestore();
+    });
+
+    it('should warn once at setConfig and ignore a non-compiling expression', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_transform: 'x ***' }],
+      });
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('123 °C');
+      const warnings = transformWarnings(warnSpy);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0][0])).toContain('invalid value_transform');
+      warnSpy.mockRestore();
+    });
+
+    it('should suppress the unit override when the transform is broken', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [
+          // compile failure and runtime failure must both fall back to the raw
+          // value AND the raw unit — never '123 Mb/s'
+          { entity: 'sensor.test', value_transform: 'x @@@', value_unit: 'Mb/s' },
+          { entity: 'sensor.test', value_transform: 'x.oops.deep', value_unit: 'Mb/s' },
+        ],
+      });
+      await element.updateComplete;
+
+      const values = Array.from(element.shadowRoot?.querySelectorAll('.primary-value') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      expect(values).toEqual(['123 °C', '123 °C']);
+      warnSpy.mockRestore();
+    });
+
+    it('should apply a transform ending in a line comment', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_transform: 'x * 8 // to bits' }],
+      });
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('984 °C');
+    });
+
+    it('should add decimals for magnitude-reducing transforms', async () => {
+      hass.states['sensor.wan_up'] = {
+        entity_id: 'sensor.wan_up',
+        state: '50',
+        attributes: { friendly_name: 'Upload', unit_of_measurement: 'kB/s' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.wan_up', value_transform: 'x / 125', value_unit: 'Mb/s' }],
+      });
+      await element.updateComplete;
+
+      // Raw-string inference alone would give precision 0 → '0 Mb/s'.
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('0.40 Mb/s');
+    });
+
+    it('should exclude broken transforms from the title average', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      hass.states['sensor.test1'] = {
+        entity_id: 'sensor.test1',
+        state: '10',
+        attributes: { unit_of_measurement: 'kB/s' },
+      };
+      hass.states['sensor.test2'] = {
+        entity_id: 'sensor.test2',
+        state: '20',
+        attributes: { unit_of_measurement: 'Mb/s' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test1', value_transform: 'x @@@', value_unit: 'Mb/s' }, 'sensor.test2'],
+        average_in_title: true,
+      });
+      await element.updateComplete;
+
+      // The raw kB/s value must not be averaged under the Mb/s label.
+      const header = element.shadowRoot?.querySelector('.card-header');
+      expect(header?.querySelector('.value')?.textContent?.trim()).toBe('20 Mb/s');
+      warnSpy.mockRestore();
+    });
+
+    it('should apply each duplicate row its own transform to the graph', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [{ entity: 'sensor.test' }, { entity: 'sensor.test', value_transform: 'x * 8' }],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await vi.runAllTimersAsync();
+
+      // The last-rendered graph belongs to the second row; with find-by-id it
+      // would wrongly use the first (untransformed) config → domain [9.5, 68.5].
+      expect(scaleLinear).toHaveBeenCalled();
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([212, 548]);
+    });
+
+    it('should apply extra_value_transform and extra_value_unit independently of the row transform', async () => {
+      hass.states['sensor.humidity'] = {
+        entity_id: 'sensor.humidity',
+        state: '45',
+        attributes: { friendly_name: 'Humidity', unit_of_measurement: '%' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [
+          {
+            entity: 'sensor.test',
+            value_transform: 'x * 10',
+            extra_value_entity: 'sensor.humidity',
+            extra_value_name: 'Hum',
+            extra_value_transform: 'x * 2',
+            extra_value_unit: 'X',
+          },
+        ],
+      });
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('1,230 °C');
+      const extra = element.shadowRoot?.querySelector('.extra-value');
+      expect(extra?.textContent?.trim()).toBe('Hum: 90 X');
+    });
+
+    it('should fall back to the raw extra value when its transform is broken', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      hass.states['sensor.humidity'] = {
+        entity_id: 'sensor.humidity',
+        state: '45',
+        attributes: { friendly_name: 'Humidity', unit_of_measurement: '%' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [
+          {
+            entity: 'sensor.test',
+            extra_value_entity: 'sensor.humidity',
+            extra_value_transform: 'x @@@',
+            extra_value_unit: 'X',
+          },
+        ],
+      });
+      await element.updateComplete;
+
+      // Raw value AND raw unit — never '45 X'.
+      const extra = element.shadowRoot?.querySelector('.extra-value');
+      expect(extra?.textContent?.trim()).toBe('45 %');
+      warnSpy.mockRestore();
+    });
+
+    it('should add decimals for magnitude-reducing extra value transforms', async () => {
+      hass.states['sensor.wan_e'] = {
+        entity_id: 'sensor.wan_e',
+        state: '50',
+        attributes: { unit_of_measurement: 'kB/s' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [
+          {
+            entity: 'sensor.test',
+            extra_value_entity: 'sensor.wan_e',
+            extra_value_transform: 'x / 125',
+            extra_value_unit: 'Mb/s',
+          },
+        ],
+      });
+      await element.updateComplete;
+
+      const extra = element.shadowRoot?.querySelector('.extra-value');
+      expect(extra?.textContent?.trim()).toBe('0.40 Mb/s');
+    });
+
+    it('should suppress the unit when value_unit is false', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_transform: 'x * 2', value_unit: false }],
+      });
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('246');
+    });
+
+    it('should suppress the extra value unit when extra_value_unit is false', async () => {
+      hass.states['sensor.humidity'] = {
+        entity_id: 'sensor.humidity',
+        state: '45',
+        attributes: { unit_of_measurement: '%' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', extra_value_entity: 'sensor.humidity', extra_value_unit: false }],
+      });
+      await element.updateComplete;
+
+      const extra = element.shadowRoot?.querySelector('.extra-value');
+      expect(extra?.textContent?.trim()).toBe('45');
+    });
+
+    it('should accept a transform pasted with surrounding quotes', async () => {
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_transform: "'x * 2'" }],
+      });
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('246 °C');
+    });
+
+    it('should leave special states untouched', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      hass.states['sensor.test'].state = 'unavailable';
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', value_transform: 'x * 8' }],
+      });
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('state.default.unavailable');
+      expect(transformWarnings(warnSpy)).toHaveLength(0);
+      warnSpy.mockRestore();
+    });
+  });
+
   describe('Auto Icon Color Source Option', () => {
     const mockNow = new Date('2023-01-01T11:30:00Z');
 
@@ -2204,6 +2709,68 @@ describe('BackgroundGraphEntities', () => {
 
     it('disables grouping for number_format "none"', () => {
       expect(formatNumber(1234567, { language: 'en', number_format: 'none' }, 0)).toBe('1234567');
+    });
+  });
+
+  describe('compileValueTransform', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    it('compiles and applies a simple expression', () => {
+      const transform = compileValueTransform('x * 8', 'sensor.test');
+      expect(transform?.(12.5)).toBe(100);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('compiles an expression ending in a line comment', () => {
+      const transform = compileValueTransform('x * 8 // convert to bits', 'sensor.test');
+      expect(transform?.(2)).toBe(16);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('unwraps expressions pasted with surrounding quotes or whitespace', () => {
+      // Quoted, the raw expression would evaluate to a string and fail as
+      // non-numeric — a common paste mistake from YAML/JS examples.
+      expect(compileValueTransform("'x / 125'", 'sensor.test')?.(250)).toBe(2);
+      expect(compileValueTransform('"x * 2"', 'sensor.test')?.(3)).toBe(6);
+      expect(compileValueTransform('  x * 2  ', 'sensor.test')?.(3)).toBe(6);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns undefined and warns on a syntax error', () => {
+      expect(compileValueTransform('x ***', 'sensor.test')).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledOnce();
+    });
+
+    it('yields NaN and warns once on a runtime error', () => {
+      // NaN is the existing gap marker; returning the input would silently mix
+      // raw-unit values into a transformed series.
+      const transform = compileValueTransform('x.foo.bar', 'sensor.test');
+      expect(transform?.(5)).toBeNaN();
+      expect(transform?.(6)).toBeNaN();
+      expect(warnSpy).toHaveBeenCalledOnce();
+    });
+
+    it('yields NaN and warns once on a non-numeric result', () => {
+      const transform = compileValueTransform('"nope"', 'sensor.test');
+      expect(transform?.(5)).toBeNaN();
+      expect(transform?.(6)).toBeNaN();
+      expect(warnSpy).toHaveBeenCalledOnce();
+    });
+
+    it('passes non-finite inputs through without invoking the expression', () => {
+      // A constant expression would return 42 if invoked; NaN in NaN out proves the bypass.
+      const transform = compileValueTransform('42', 'sensor.test');
+      expect(transform?.(NaN)).toBeNaN();
+      expect(transform?.(Infinity)).toBe(Infinity);
+      expect(warnSpy).not.toHaveBeenCalled();
     });
   });
 });
