@@ -175,6 +175,71 @@ class HaCheckbox extends HaSwitch {
 if (!customElements.get('ha-checkbox')) customElements.define('ha-checkbox', HaCheckbox);
 
 // --- Editor Mock Components ---
+// Approximates Home Assistant's filled Material field so the demo editor reads like
+// the real one: tinted box, rounded top, underline that thickens and picks up the
+// primary colour on focus, small floating label. Shared by ha-input and ha-select.
+const MOCK_FIELD_STYLES = `
+  .field {
+    background: var(--mdc-text-field-fill-color, rgba(0, 0, 0, 0.05));
+    border-radius: 4px 4px 0 0;
+    border-bottom: 1px solid var(--mdc-text-field-idle-line-color, rgba(0, 0, 0, 0.42));
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 56px;
+    padding: 8px 16px;
+  }
+  .field:focus-within {
+    border-bottom-color: var(--primary-color, #03a9f4);
+    box-shadow: inset 0 -1px 0 0 var(--primary-color, #03a9f4);
+  }
+  .field > label {
+    color: var(--secondary-text-color, #727272);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.2;
+    /* Keeps a long label on one line so side-by-side fields stay the same height. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .field:focus-within > label { color: var(--primary-color, #03a9f4); }
+  input, select {
+    background: transparent;
+    border: none;
+    box-sizing: border-box;
+    color: var(--primary-text-color, #212121);
+    font-family: inherit;
+    font-size: 16px;
+    outline: none;
+    padding: 0;
+    width: 100%;
+  }
+  input:disabled, select:disabled { color: var(--secondary-text-color, #727272); }
+  input::placeholder { color: var(--secondary-text-color, #727272); opacity: 0.7; }
+  .field.select { position: relative; }
+  select { appearance: none; padding-right: 24px; text-overflow: ellipsis; }
+  .field.select::after {
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid var(--secondary-text-color, #727272);
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    right: 16px;
+    top: 50%;
+  }
+  .helper {
+    color: var(--secondary-text-color, #727272);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.3;
+    padding: 4px 16px 0;
+  }
+`;
+
 class HaTextfield extends HTMLElement {
   constructor() {
     super();
@@ -204,29 +269,50 @@ class HaTextfield extends HTMLElement {
   get configValue() {
     return this.dataset.configValue;
   }
+  set helper(val) {
+    this._helper = val;
+    this.render();
+  }
+  set placeholder(val) {
+    this._placeholder = val;
+    this.render();
+  }
+  set disabled(val) {
+    this._disabled = val;
+    this.render();
+  }
   connectedCallback() {
     this.render();
   }
   render() {
     this.shadowRoot.innerHTML = `
-      <style>
-        input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; font-size: 14px; }
-        label { font-size: 12px; color: #666; display: block; margin-bottom: 4px; font-family: inherit; }
-      </style>
-      <label>${this._label || ''}</label>
-      <input type="${this.getAttribute('type') || this._type || 'text'}" value="${this._value || ''}" />
+      <style>${MOCK_FIELD_STYLES}</style>
+      <div class="field">
+        <label>${this._label || ''}</label>
+        <input type="${this.getAttribute('type') || this._type || 'text'}" />
+      </div>
+      ${this._helper ? `<div class="helper">${this._helper}</div>` : ''}
     `;
-    this.shadowRoot.querySelector('input').addEventListener('input', (e) => {
+    const input = this.shadowRoot.querySelector('input');
+    // Assigned as properties, not interpolated into the markup: a value_transform
+    // expression may contain quotes, which would break out of the attribute.
+    input.value = this._value ?? '';
+    input.placeholder = this._placeholder ?? '';
+    input.disabled = !!this._disabled;
+    input.addEventListener('input', (e) => {
       this._value = e.target.value;
       this.dispatchEvent(new Event('value-changed', { bubbles: true, composed: true }));
     });
-    this.shadowRoot.querySelector('input').addEventListener('change', (e) => {
+    input.addEventListener('change', (e) => {
       this._value = e.target.value;
       this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     });
   }
 }
 if (!customElements.get('ha-textfield')) customElements.define('ha-textfield', HaTextfield);
+// The editor moved from ha-textfield to ha-input in ec084d2 but this file kept only
+// the old name, so every text field in the demo rendered as an empty 0px element.
+if (!customElements.get('ha-input')) customElements.define('ha-input', class extends HaTextfield {});
 if (!customElements.get('ha-icon-picker')) customElements.define('ha-icon-picker', class extends HaTextfield {});
 if (!customElements.get('ha-entity-picker')) customElements.define('ha-entity-picker', class extends HaTextfield {});
 
@@ -388,11 +474,11 @@ class HaSelect extends HTMLElement {
       .join('');
 
     this.shadowRoot.innerHTML = `
-      <style>
-        select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; font-size: 14px; }
-      </style>
-      <label style="font-size:12px; color:#666; display:block; font-family: inherit; margin-bottom: 4px;">${this._label || ''}</label>
-      <select>${optionsHtml}</select>
+      <style>${MOCK_FIELD_STYLES}</style>
+      <div class="field select">
+        <label>${this._label || ''}</label>
+        <select>${optionsHtml}</select>
+      </div>
     `;
     this.shadowRoot.querySelector('select').addEventListener('change', (e) => {
       this._value = e.target.value;
@@ -462,6 +548,11 @@ class HaExpansionPanel extends HTMLElement {
     this._header = val;
     this.render();
   }
+  // The editor binds .expanded to open a section that the row already uses.
+  set expanded(val) {
+    this._expanded = val;
+    this.render();
+  }
   connectedCallback() {
     this.render();
   }
@@ -472,7 +563,7 @@ class HaExpansionPanel extends HTMLElement {
         summary { font-weight: 500; cursor: pointer; font-family: inherit; font-size: 15px; }
         .content { margin-top: 12px; }
       </style>
-      <details>
+      <details${this._expanded ? ' open' : ''}>
         <summary>${this._header || 'Details'}</summary>
         <div class="content"><slot></slot></div>
       </details>

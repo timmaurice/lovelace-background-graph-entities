@@ -19,6 +19,10 @@
   --divider-color: rgba(0, 0, 0, 0.12);
   --outline-color: rgba(0, 0, 0, 0.12);
 
+  /* Filled-field look for the mocked ha-input / ha-select, same names HA uses */
+  --mdc-text-field-fill-color: rgba(0, 0, 0, 0.05);
+  --mdc-text-field-idle-line-color: rgba(0, 0, 0, 0.42);
+
   /* Icons */
   --state-icon-color: #44739e;
   --state-icon-active-color: #fdd835;
@@ -47,6 +51,9 @@ body.dark-mode-page {
   --light-primary-color: #b3e5fc;
   --divider-color: rgba(255, 255, 255, 0.12);
   --outline-color: rgba(255, 255, 255, 0.12);
+
+  --mdc-text-field-fill-color: rgba(255, 255, 255, 0.05);
+  --mdc-text-field-idle-line-color: rgba(255, 255, 255, 0.42);
 
   /* Icons */
   --state-icon-color: #9e9e9e;
