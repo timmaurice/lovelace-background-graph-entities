@@ -31,6 +31,13 @@
   margin-top: 8px;
 }
 
+// In a side-by-side row that margin only offsets the select against the plain
+// field next to it, so the two columns start 8px apart. Standalone dropdowns
+// keep it.
+.side-by-side > .dropdown-wrapper {
+  margin-top: 0;
+}
+
 .entities-container {
   display: flex;
   flex-direction: column;
