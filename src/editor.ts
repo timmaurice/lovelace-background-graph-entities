@@ -282,6 +282,9 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     if (target.tagName.toLowerCase() === 'ha-slider' || target.type === 'number') {
       value = target.value === '' ? undefined : Number(target.value);
     }
+    // Trailing whitespace forces the YAML dumper into quoted style and pollutes
+    // transform cache keys; no field wants it.
+    if (typeof value === 'string') value = value.trim();
 
     this._updateEntityOrGlobalConfig(index, (entityConf) => {
       const newEntityConf = { ...entityConf };
@@ -598,6 +601,26 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                         ></ha-input>
                       `
                 }
+                <div class="side-by-side">
+                  <ha-input
+                    .label=${localize(this.hass, 'component.bge.editor.extra_value_transform')}
+                    .value=${entityConf.extra_value_transform ?? ''}
+                    .helper=${localize(this.hass, 'component.bge.editor.extra_value_transform_helper')}
+                    helperPersistent
+                    data-index=${this._editingIndex}
+                    data-field="extra_value_transform"
+                    @change=${this._entityAttributeChanged}
+                  ></ha-input>
+                  <ha-input
+                    .label=${localize(this.hass, 'component.bge.editor.extra_value_unit')}
+                    .value=${entityConf.extra_value_unit ?? ''}
+                    .helper=${localize(this.hass, 'component.bge.editor.extra_value_unit_helper')}
+                    helperPersistent
+                    data-index=${this._editingIndex}
+                    data-field="extra_value_unit"
+                    @change=${this._entityAttributeChanged}
+                  ></ha-input>
+                </div>
               `
             : ''
         }
@@ -666,6 +689,27 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
               ></hex-color-picker>
             </div>
           </div>
+        </div>
+
+        <div class="side-by-side">
+          <ha-input
+            .label=${localize(this.hass, 'component.bge.editor.value_transform')}
+            .value=${entityConf.value_transform ?? ''}
+            .helper=${localize(this.hass, 'component.bge.editor.value_transform_helper')}
+            helperPersistent
+            data-index=${this._editingIndex}
+            data-field="value_transform"
+            @change=${this._entityAttributeChanged}
+          ></ha-input>
+          <ha-input
+            .label=${localize(this.hass, 'component.bge.editor.value_unit')}
+            .value=${entityConf.value_unit ?? ''}
+            .helper=${localize(this.hass, 'component.bge.editor.value_unit_helper')}
+            helperPersistent
+            data-index=${this._editingIndex}
+            data-field="value_unit"
+            @change=${this._entityAttributeChanged}
+          ></ha-input>
         </div>
 
         ${

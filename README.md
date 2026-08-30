@@ -136,10 +136,14 @@ Each entry in the `entities` list can be a string (the entity ID) or an object w
 | `auto_icon_color_source`     | string         | `latest`                  | Which history point feeds `auto_icon_color`. One of `latest`, `max`, `min`, `avg` (mean), or `median`.                                                                                                                                                          |
 | `value_source`               | string         | `latest`                  | Which value to display: `latest` (current state), `max`, `min`, `avg` (mean), or `median` of history. Only applies when the entity is numeric and has no separate `graph_entity`.                                                                               |
 | `value_label`                | string         | `''`                      | Optional suffix shown after the displayed value, e.g. `(peak)`. Same availability constraints as `value_source`.                                                                                                                                                |
+| `value_transform`            | string         | `undefined`               | JavaScript expression applied to every value of this row; `x` is the raw number (e.g. `x * 8`). See example 6 for scope and caveats.                                                                                                                            |
+| `value_unit`                 | string/false   | Entity's unit             | Overrides the unit shown after displayed values, typically together with `value_transform`. Set `false` to show the number without any unit.                                                                                                                    |
 | `graph_entity`               | string         | `entity` ID               | An optional entity ID to use for the graph's history data, instead of the main entity.                                                                                                                                                                          |
 | `show_graph_entity_state`    | boolean        | `false`                   | If `graph_entity` is set, set this to `true` to display its state next to the main entity's state.                                                                                                                                                              |
 | `extra_value_entity`         | string         | `undefined`               | An independent extra entity whose current state is shown next to the main value. Unlike `graph_entity`, it never affects what's graphed or the row's click target (clicking always opens `entity`'s more-info) — it's purely a second value.                    |
 | `extra_value_name`           | string/boolean | `undefined`               | Only used with `extra_value_entity`. Set a custom label shown before the value (`"Label: value"`), or `true` to use that entity's friendly name as the label. Omit for just the bare value.                                                                     |
+| `extra_value_transform`      | string         | `undefined`               | Like `value_transform`, but applied to the extra value. See example 6.                                                                                                                                                                                          |
+| `extra_value_unit`           | string/false   | Extra entity's unit       | Like `value_unit`, but applied to the extra value.                                                                                                                                                                                                              |
 | `overwrite_graph_appearance` | boolean        | `false`                   | Set to `true` to enable entity-specific graph settings below. Required for per-entity overrides to apply.                                                                                                                                                       |
 | `line_color`                 | string         | Global `line_color`       | Overrides the global `line_color` for this entity only.                                                                                                                                                                                                         |
 | `line_opacity`               | number         | Global `line_opacity`     | Overrides the global `line_opacity` for this entity only.                                                                                                                                                                                                       |
@@ -282,6 +286,48 @@ entities:
   - sensor.outside_temperature
   - sensor.living_room_temperature
   - sensor.bedroom_temperature
+```
+
+#### 6. Value Transform & Unit Override
+
+Rescale a value without creating a template sensor. `value_transform` is a JavaScript expression
+evaluated in the browser, with `x` as the raw number; `value_unit` replaces the displayed unit. The
+transform applies to the row's displayed value, its graph line (including a `graph_entity`'s
+series), `value_source` aggregates, sorting by value, the title average, and `auto_icon_color`.
+Because the graph is drawn in transformed units, `graph_min`, `graph_max`, and `color_thresholds`
+for the row are interpreted in **transformed (displayed) units**, not raw units. The extra value has
+its own `extra_value_transform` / `extra_value_unit` pair; `show_graph_entity_state` text always
+shows the raw state. Set a unit override to `false` to show the number with no unit at all. A
+broken expression logs a console warning and the affected value falls back to the raw number _and_
+raw unit.
+
+```yaml
+type: custom:background-graph-entities
+title: Network
+entities:
+  # Peak throughput as the main value with the live reading alongside —
+  # the same sensor twice, both converted from kB/s to Mb/s
+  - entity: sensor.inbytes_kilobytes_per_second
+    name: Download
+    icon: mdi:arrow-down
+    value_source: max
+    value_label: Peak
+    value_transform: x / 125 # kB/s → Mb/s (× 8 bits, ÷ 1000)
+    value_unit: Mb/s
+    extra_value_entity: sensor.inbytes_kilobytes_per_second
+    extra_value_name: Live
+    extra_value_transform: x / 125
+    extra_value_unit: Mb/s
+  - entity: sensor.wan_upload # reports kB/s
+    name: Upload
+    value_transform: x / 125
+    value_unit: Mb/s
+    overwrite_graph_appearance: true
+    color_thresholds: # thresholds are in the transformed unit: Mb/s, not kB/s
+      - value: 0
+        color: '#2ecc71'
+      - value: 80
+        color: '#e74c3c'
 ```
 
 ## Development

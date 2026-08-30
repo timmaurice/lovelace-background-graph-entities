@@ -47,6 +47,7 @@ const setupDemos = async () => {
       'sensor.living_room': generateHistory(mockHassBase.states['sensor.living_room'].state, 0.3),
       'sensor.outside': generateHistory(mockHassBase.states['sensor.outside'].state, 1.5),
       'sensor.humidity': generateHistory(mockHassBase.states['sensor.humidity'].state, 2),
+      'sensor.wan_download': generateHistory(mockHassBase.states['sensor.wan_download'].state, 4),
       'switch.ac': generateHistory(1, 0),
       'sensor.flaky_probe': generateFlakyHistory(),
     }),

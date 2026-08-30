@@ -358,4 +358,23 @@ test.describe('Background Graph Entities', () => {
       path: 'test/e2e/screenshots/8_tile_extra_value.png',
     });
   });
+
+  test('9. Value Transform & Unit Override', async ({ page }) => {
+    await setupCard(page, {
+      title: 'Transform Test',
+      entities: [{ entity: 'sensor.humidity', value_transform: 'x * 2', value_unit: 'X' }],
+    });
+
+    const cardElement = page.locator('background-graph-entities');
+    await expect(cardElement).toBeVisible();
+
+    // 45 % → transformed ×2 with the overridden unit. Exercises new Function
+    // in a real browser rather than jsdom.
+    const row = cardElement.locator('.entity-row').nth(0);
+    await expect(row.locator('.primary-value')).toHaveText('90 X');
+
+    await page.screenshot({
+      path: 'test/e2e/screenshots/9_value_transform.png',
+    });
+  });
 });

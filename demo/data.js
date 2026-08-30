@@ -29,6 +29,11 @@ export const mockHassBase = {
       state: 'on',
       attributes: { friendly_name: 'Air Conditioner' },
     },
+    'sensor.wan_download': {
+      entity_id: 'sensor.wan_download',
+      state: '12.5',
+      attributes: { friendly_name: 'WAN Download', unit_of_measurement: 'kB/s' },
+    },
     // A sensor whose history contains an `unavailable` stretch, used by the
     // `show_gaps` examples below.
     'sensor.flaky_probe': {
@@ -43,6 +48,7 @@ export const mockHassBase = {
     'sensor.outside': { entity_id: 'sensor.outside', icon: 'mdi:thermometer' },
     'sensor.humidity': { entity_id: 'sensor.humidity', icon: 'mdi:water-percent' },
     'switch.ac': { entity_id: 'switch.ac', icon: 'mdi:air-conditioner' },
+    'sensor.wan_download': { entity_id: 'sensor.wan_download', icon: 'mdi:download-network' },
     'sensor.flaky_probe': { entity_id: 'sensor.flaky_probe', icon: 'mdi:thermometer-alert' },
   },
 };
@@ -180,6 +186,26 @@ export const demoConfigs = [
           auto_icon_color: true,
           value_source: 'min',
           auto_icon_color_source: 'min',
+        },
+      ],
+    },
+  },
+  {
+    name: 'Value Transform & Unit Override',
+    description:
+      'The WAN sensor reports kB/s; value_transform (x * 8) and value_unit render it as kb/s, with the same sensor shown in Mb/s as an extra value.',
+    config: {
+      type: 'custom:background-graph-entities',
+      title: 'Network',
+      entities: [
+        {
+          entity: 'sensor.wan_download',
+          name: 'Download',
+          value_transform: 'x * 8',
+          value_unit: 'kb/s',
+          extra_value_entity: 'sensor.wan_download',
+          extra_value_transform: 'x / 125',
+          extra_value_unit: 'Mb/s',
         },
       ],
     },

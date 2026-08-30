@@ -8,12 +8,13 @@ import {
   BackgroundGraphEntitiesConfig,
   EntityConfig,
   ColorThreshold,
+  HassEntity,
 } from './types.js';
 import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
 import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
-import { downsampleHistory, formatNumber, MS_IN_S, S_IN_MIN } from './utils.js';
+import { compileValueTransform, downsampleHistory, formatNumber, MS_IN_S, S_IN_MIN, ValueTransform } from './utils.js';
 import { extent, max as d3max, min as d3min } from 'd3-array';
 
 // Default configuration values
@@ -81,6 +82,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   > = new Map();
   private _historyFetched = false;
   private _timerId?: number;
+  // Compiled value_transform functions, memoized per entity+expression so config
+  // rebuilds (e.g. editor edits) neither recompile nor re-warn. `null` caches a
+  // failed compile.
+  private _transformCache = new Map<string, ValueTransform | null>();
 
   private _renderRetryMap = new Map<HTMLElement, number>();
   private _lastSortedEntityIds: string[] = [];
@@ -186,10 +191,25 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     containers.forEach((container) => {
       const entityId = container.dataset.entityId;
       if (entityId) {
-        const entityConfig = this._entities.find((e) => e.entity === entityId)!;
+        // Resolve by row index: the same entity can appear in several rows with
+        // different transforms/appearance, and find-by-id would give them all
+        // the first row's config.
+        const indexed = this._entities[Number(container.dataset.entityIndex)];
+        const entityConfig =
+          indexed?.entity === entityId ? indexed : this._entities.find((e) => e.entity === entityId)!;
         const graphEntityId = entityConfig.graph_entity || entityId;
         const historyData = this._history.get(graphEntityId);
-        this._renderD3Graph(container, historyData?.downsampled, entityConfig);
+        // Transform here rather than at fetch time: stored history can be shared
+        // by rows with different transforms. Downstream (y-domain, graph_min/max,
+        // thresholds, dots) then operates entirely in transformed units. The
+        // row's transform deliberately applies even when graph_entity is a
+        // different entity: row-scoped thresholds/bounds must match the line.
+        const transform = this._getTransform(entityConfig);
+        const data =
+          transform && historyData?.downsampled
+            ? historyData.downsampled.map((d) => ({ timestamp: d.timestamp, value: transform(d.value) }))
+            : historyData?.downsampled;
+        this._renderD3Graph(container, data, entityConfig);
       }
     });
   }
@@ -297,11 +317,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         }
       | undefined,
     source: 'latest' | 'max' | 'min' | 'avg' | 'median',
+    transform?: ValueTransform,
   ): number | undefined {
     if (!historyData) return undefined;
     const history = source === 'max' || source === 'min' ? historyData.raw : historyData.downsampled;
     if (!history || history.length === 0) return undefined;
-    const finite = history.map((h) => h.value).filter((v) => Number.isFinite(v));
+    // Transform before aggregating: for a decreasing transform (e.g. `50 - x`)
+    // the max of transformed values is not the transform of the raw max.
+    const finite = history.map((h) => (transform ? transform(h.value) : h.value)).filter((v) => Number.isFinite(v));
     if (finite.length === 0) return undefined;
     if (source === 'max') return d3max(finite);
     if (source === 'min') return d3min(finite);
@@ -316,12 +339,76 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return finite[finite.length - 1];
   }
 
+  private _getCompiledTransform(expression: string | undefined, entityId: string): ValueTransform | undefined {
+    if (!expression) return undefined;
+    const key = `${entityId}\n${expression}`;
+    let compiled = this._transformCache.get(key);
+    if (compiled === undefined) {
+      compiled = compileValueTransform(expression, entityId) ?? null;
+      this._transformCache.set(key, compiled);
+    }
+    return compiled ?? undefined;
+  }
+
+  private _getTransform(entityConfig: EntityConfig): ValueTransform | undefined {
+    return this._getCompiledTransform(entityConfig.value_transform, entityConfig.entity);
+  }
+
+  /**
+   * Resolves the number a row displays, sorts, and averages by: parse the state,
+   * apply the row's value_transform, then override from history when
+   * value_source demands it. `broken` marks a configured transform that failed
+   * (compile error, or a finite state mapped to a non-finite result); the value
+   * then falls back to raw, and the caller must fall back to the raw unit too —
+   * keeping the override would label raw numbers with the wrong unit.
+   */
+  private _getEffectiveValue(
+    entityConfig: EntityConfig,
+    stateObj: HassEntity,
+  ): { num: number; str: string; broken: boolean; canUseValueSource: boolean } {
+    const stateNum = parseFloat(stateObj.state);
+    const isBooleanState = stateObj.state === 'on' || stateObj.state === 'off';
+    // value_source only applies for numeric entities whose graph shares the same
+    // entity — otherwise max/min would be over a different series.
+    const canUseValueSource =
+      !isBooleanState && (!entityConfig.graph_entity || entityConfig.graph_entity === entityConfig.entity);
+    const valueSource = canUseValueSource ? (entityConfig.value_source ?? 'latest') : 'latest';
+
+    let transform = this._getTransform(entityConfig);
+    const transformedNum = transform ? transform(stateNum) : stateNum;
+    const broken =
+      !!entityConfig.value_transform && (!transform || (Number.isFinite(stateNum) && !Number.isFinite(transformedNum)));
+    if (broken) transform = undefined;
+
+    let num = broken ? stateNum : transformedNum;
+    // A non-finite stateNum (boolean/unavailable/unknown) keeps the raw state
+    // string so _localizeSpecialState still recognizes it.
+    let str = transform && Number.isFinite(stateNum) ? String(num) : stateObj.state;
+    if (valueSource !== 'latest') {
+      const historyValue = this._pickHistoryValue(this._history.get(entityConfig.entity), valueSource, transform);
+      if (historyValue !== undefined) {
+        num = historyValue;
+        str = String(historyValue);
+      }
+    }
+    return { num, str, broken, canUseValueSource };
+  }
+
+  // A shrinking transform (e.g. kB/s → Mb/s) can push a value below the
+  // precision inferred from the raw state string ('50' → 0 decimals → '0 Mb/s'),
+  // so guarantee two significant digits when the transformed magnitude is < 10.
+  private _transformPrecisionFloor(value: number): number {
+    const abs = Math.abs(value);
+    if (!Number.isFinite(value) || abs === 0 || abs >= 10) return 0;
+    return Math.ceil(-Math.log10(abs)) + 1;
+  }
+
   private _getAutoIconColor(entityConfig: EntityConfig): string | undefined {
     if (!entityConfig.auto_icon_color) return undefined;
     const graphEntityId = entityConfig.graph_entity || entityConfig.entity;
     const history = this._history.get(graphEntityId);
     const source = entityConfig.auto_icon_color_source ?? 'latest';
-    const value = this._pickHistoryValue(history, source);
+    const value = this._pickHistoryValue(history, source, this._getTransform(entityConfig));
     if (value === undefined) return undefined;
     return this._getDotColor(value, entityConfig);
   }
@@ -377,34 +464,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           valB = stateObjB.state;
         } else {
           // method === 'value'
-          const stateNumA = parseFloat(stateObjA.state);
-          const isBooleanA = stateObjA.state === 'on' || stateObjA.state === 'off';
-          const canUseValueSourceA = !isBooleanA && (!a.graph_entity || a.graph_entity === a.entity);
-          const valueSourceA = canUseValueSourceA ? (a.value_source ?? 'latest') : 'latest';
-
-          let effectiveNumA = stateNumA;
-          if (valueSourceA !== 'latest') {
-            const historyValue = this._pickHistoryValue(this._history.get(a.entity), valueSourceA);
-            if (historyValue !== undefined) {
-              effectiveNumA = historyValue;
-            }
-          }
-
+          const effectiveNumA = this._getEffectiveValue(a, stateObjA).num;
           valA = isNaN(effectiveNumA) ? stateObjA.state : effectiveNumA;
-
-          const stateNumB = parseFloat(stateObjB.state);
-          const isBooleanB = stateObjB.state === 'on' || stateObjB.state === 'off';
-          const canUseValueSourceB = !isBooleanB && (!b.graph_entity || b.graph_entity === b.entity);
-          const valueSourceB = canUseValueSourceB ? (b.value_source ?? 'latest') : 'latest';
-
-          let effectiveNumB = stateNumB;
-          if (valueSourceB !== 'latest') {
-            const historyValue = this._pickHistoryValue(this._history.get(b.entity), valueSourceB);
-            if (historyValue !== undefined) {
-              effectiveNumB = historyValue;
-            }
-          }
-
+          const effectiveNumB = this._getEffectiveValue(b, stateObjB).num;
           valB = isNaN(effectiveNumB) ? stateObjB.state : effectiveNumB;
         }
 
@@ -479,7 +541,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   // graph_entity and extra_value_entity so both read the same. nameConfig (extra_value_name
   // only) labels it: a string verbatim, `true` the friendly name. The label survives an
   // unavailable entity, so the row still says which value is missing.
-  private _formatCompanionValue(entityId: string, nameConfig?: string | boolean): string {
+  private _formatCompanionValue(
+    entityId: string,
+    nameConfig?: string | boolean,
+    transformExpr?: string,
+    unitConfig?: string | false,
+  ): string {
     const stateObj = this.hass.states[entityId];
 
     const label =
@@ -497,12 +564,29 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (specialState) {
         value = specialState;
       } else {
-        const unit = stateObj.attributes.unit_of_measurement ?? '';
         const stateNum = parseFloat(stateObj.state);
-        const displayPrecision = this.hass.entities[entityId]?.display_precision;
+        const transform = this._getCompiledTransform(transformExpr, entityId);
+        const transformedNum = transform ? transform(stateNum) : stateNum;
+        // Same fail-safe as the main value: a broken transform falls back to
+        // the raw value AND the raw unit rather than mislabeling.
+        const broken =
+          !!transformExpr && (!transform || (Number.isFinite(stateNum) && !Number.isFinite(transformedNum)));
+        const num = broken ? stateNum : transformedNum;
+        const unitOverride = unitConfig === false ? '' : unitConfig;
+        const unit = (broken ? undefined : unitOverride) ?? stateObj.attributes.unit_of_measurement ?? '';
+        let precision = this.hass.entities[entityId]?.display_precision;
+        if (!broken && transform && precision === undefined && !isNaN(stateNum)) {
+          // Companions normally format only with an explicit registry precision,
+          // but a transformed number must be formatted (String(num) can carry
+          // float artifacts) — infer from the raw state like the main value.
+          const rawDecimals = stateObj.state.includes('.')
+            ? stateObj.state.length - stateObj.state.indexOf('.') - 1
+            : 0;
+          precision = Math.max(rawDecimals, this._transformPrecisionFloor(num));
+        }
         const formattedValue =
-          !isNaN(stateNum) && typeof displayPrecision === 'number'
-            ? formatNumber(stateNum, this.hass.locale, displayPrecision)
+          !isNaN(num) && typeof precision === 'number'
+            ? formatNumber(num, this.hass.locale, precision)
             : stateObj.state;
         value = [formattedValue, unit].filter(Boolean).join(' ');
       }
@@ -515,7 +599,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const stateObj = this.hass.states[entityConfig.entity];
     if (!stateObj) return this._renderUnavailableEntityRow(entityConfig);
     const entityDisplay = this.hass.entities[entityConfig.entity];
-    const unit = stateObj.attributes.unit_of_measurement ?? '';
+    // Lets _renderAllGraphs resolve THIS row's config even when the same entity
+    // appears in several rows (reference identity, so duplicates resolve too).
+    const entityIndex = this._entities.indexOf(entityConfig);
     const stateNum = parseFloat(stateObj.state);
     let displayValue: string;
     const isBooleanState = stateObj.state === 'on' || stateObj.state === 'off';
@@ -533,7 +619,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     // Unlike graph_entity, extra_value_entity never affects the graph or the click target.
     const extraDisplayValue = entityConfig.extra_value_entity
-      ? this._formatCompanionValue(entityConfig.extra_value_entity, entityConfig.extra_value_name)
+      ? this._formatCompanionValue(
+          entityConfig.extra_value_entity,
+          entityConfig.extra_value_name,
+          entityConfig.extra_value_transform,
+          entityConfig.extra_value_unit,
+        )
       : undefined;
 
     const iconStyle = iconColor ? `color: ${iconColor}` : '';
@@ -545,22 +636,19 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       }
     };
 
-    // value_source / value_label only apply for numeric entities whose graph
-    // shares the same entity — otherwise max/min would be over a different series.
-    const canUseValueSource =
-      !isBooleanState && (!entityConfig.graph_entity || entityConfig.graph_entity === entityConfig.entity);
-    const valueSource = canUseValueSource ? (entityConfig.value_source ?? 'latest') : 'latest';
+    const {
+      num: effectiveNum,
+      str: effectiveStateString,
+      broken,
+      canUseValueSource,
+    } = this._getEffectiveValue(entityConfig, stateObj);
+    // value_label shares value_source's availability rules.
     const valueLabel = canUseValueSource ? entityConfig.value_label : undefined;
-
-    let effectiveNum = stateNum;
-    let effectiveStateString = stateObj.state;
-    if (valueSource !== 'latest') {
-      const historyValue = this._pickHistoryValue(this._history.get(entityConfig.entity), valueSource);
-      if (historyValue !== undefined) {
-        effectiveNum = historyValue;
-        effectiveStateString = String(historyValue);
-      }
-    }
+    // A broken transform falls back to the raw value, so the raw unit must
+    // follow — the override would label raw numbers with the wrong unit.
+    // value_unit: false suppresses the unit entirely.
+    const unitOverride = entityConfig.value_unit === false ? '' : entityConfig.value_unit;
+    const unit = (broken ? undefined : unitOverride) ?? stateObj.attributes.unit_of_measurement ?? '';
 
     // Checked against the effective value, so a max/min/avg drawn from history still shows
     // even while the entity itself is currently unknown or unavailable.
@@ -581,12 +669,15 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       // Prefer the entity registry's display_precision. When that isn't set,
       // infer the precision from the current state string so that max/min
       // values match the formatting users already see for `latest`.
-      const inferredPrecision =
+      let inferredPrecision =
         !isNaN(stateNum) && stateObj.state.includes('.')
           ? stateObj.state.length - stateObj.state.indexOf('.') - 1
           : !isNaN(stateNum)
             ? 0
             : undefined;
+      if (!broken && entityConfig.value_transform && inferredPrecision !== undefined) {
+        inferredPrecision = Math.max(inferredPrecision, this._transformPrecisionFloor(effectiveNum));
+      }
       const displayPrecision = entityDisplay?.display_precision ?? inferredPrecision;
       let valueToDisplay = effectiveStateString;
       if (!isNaN(effectiveNum) && typeof displayPrecision === 'number') {
@@ -651,7 +742,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               ${extraDisplayValue ? html`<span class="extra-value">· ${extraDisplayValue}</span>` : ''}
             </div>
           </div>
-          <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
+          <div class="graph-container" data-entity-id=${entityConfig.entity} data-entity-index=${entityIndex}></div>
         </div>
       `;
     }
@@ -684,7 +775,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               : ''
           }
         </div>
-        <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
+        <div class="graph-container" data-entity-id=${entityConfig.entity} data-entity-index=${entityIndex}></div>
         ${
           isToggleable && !isTileStyle
             ? html`
@@ -730,7 +821,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       >
         ${showIcon ? html`<ha-icon class="entity-icon" icon=${UNAVAILABLE_ICON}></ha-icon>` : ''}
         <div class="entity-name">${entityConfig.name || entityConfig.entity}</div>
-        <div class="graph-container" data-entity-id=${entityConfig.entity}></div>
+        <div
+          class="graph-container"
+          data-entity-id=${entityConfig.entity}
+          data-entity-index=${this._entities.indexOf(entityConfig)}
+        ></div>
         <div class="entity-value">${this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT}</div>
       </div>
     `;
@@ -986,28 +1081,17 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       const stateObj = this.hass.states[entityConfig.entity];
       if (!stateObj) continue;
 
-      const isBooleanState = stateObj.state === 'on' || stateObj.state === 'off';
-      if (isBooleanState) continue;
-
-      const stateNum = parseFloat(stateObj.state);
-      if (isNaN(stateNum)) continue;
-
-      const canUseValueSource = !entityConfig.graph_entity || entityConfig.graph_entity === entityConfig.entity;
-      const valueSource = canUseValueSource ? (entityConfig.value_source ?? 'latest') : 'latest';
-
-      let effectiveNum = stateNum;
-      if (valueSource !== 'latest') {
-        const historyValue = this._pickHistoryValue(this._history.get(entityConfig.entity), valueSource);
-        if (historyValue !== undefined) {
-          effectiveNum = historyValue;
-        }
-      }
+      const { num: effectiveNum, broken } = this._getEffectiveValue(entityConfig, stateObj);
+      // Non-numeric/boolean states parse to NaN; a broken transform can't
+      // produce a value in its labeled units. Both are excluded.
+      if (broken || !Number.isFinite(effectiveNum)) continue;
 
       sum += effectiveNum;
       count++;
 
       // Unit
-      const unit = stateObj.attributes.unit_of_measurement ?? '';
+      const unitOverride = entityConfig.value_unit === false ? '' : entityConfig.value_unit;
+      const unit = unitOverride ?? stateObj.attributes.unit_of_measurement ?? '';
       if (firstUnit === null) {
         firstUnit = unit;
       } else if (firstUnit !== unit) {
@@ -1016,9 +1100,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
       // Precision
       const entityDisplay = this.hass.entities[entityConfig.entity];
-      const inferredPrecision = stateObj.state.includes('.')
+      let inferredPrecision = stateObj.state.includes('.')
         ? stateObj.state.length - stateObj.state.indexOf('.') - 1
         : 0;
+      if (entityConfig.value_transform) {
+        inferredPrecision = Math.max(inferredPrecision, this._transformPrecisionFloor(effectiveNum));
+      }
       const displayPrecision = entityDisplay?.display_precision ?? inferredPrecision;
       if (displayPrecision !== undefined && displayPrecision > maxPrecision) {
         maxPrecision = displayPrecision;

@@ -144,6 +144,57 @@ export const formatNumber = (value: number, locale: FrontendLocaleData | undefin
   return new Intl.NumberFormat(numberFormatToLocale(effectiveLocale), options).format(value);
 };
 
+export type ValueTransform = (x: number) => number;
+
+/**
+ * Compiles a `value_transform` config expression (e.g. `x * 8`) into a function.
+ *
+ * The expression is config-author-supplied JS evaluated in the viewer's browser
+ * (same trust model as apexcharts-card's `transform`), so failures must never
+ * break the card: a compile error returns `undefined` (treated as no transform),
+ * and a runtime error or non-numeric result yields NaN — an already-handled gap
+ * marker — rather than the raw input, which would silently mix raw-unit values
+ * into an otherwise transformed series. Each failure mode warns once, not per
+ * render frame. Non-finite inputs (NaN gap markers, unavailable states) bypass
+ * the expression so gaps survive intact.
+ */
+export function compileValueTransform(expression: string, entityId: string): ValueTransform | undefined {
+  let expr = expression.trim();
+  // A pasted expression sometimes arrives wrapped in its YAML/JS quotes
+  // ('x / 125'); as JS that evaluates to a string, not a number — unwrap it.
+  const first = expr[0];
+  if (expr.length >= 2 && (first === "'" || first === '"') && expr.endsWith(first)) {
+    expr = expr.slice(1, -1).trim();
+  }
+  let fn: (x: number) => unknown;
+  try {
+    // The newlines let an expression end in a `// comment` without swallowing
+    // the closing parenthesis.
+    fn = new Function('x', `"use strict"; return (\n${expr}\n);`) as (x: number) => unknown;
+  } catch (e) {
+    console.warn(`background-graph-entities: invalid value_transform for ${entityId}: "${expression}"`, e);
+    return undefined;
+  }
+  let warned = false;
+  return (x: number): number => {
+    if (!Number.isFinite(x)) return x;
+    try {
+      const result = fn(x);
+      if (typeof result === 'number' && Number.isFinite(result)) return result;
+      if (!warned) {
+        warned = true;
+        console.warn(`background-graph-entities: value_transform for ${entityId} returned a non-numeric result`);
+      }
+    } catch (e) {
+      if (!warned) {
+        warned = true;
+        console.warn(`background-graph-entities: value_transform for ${entityId} threw`, e);
+      }
+    }
+    return NaN;
+  };
+}
+
 /**
  * Dispatches a custom event with an optional detail value.
  *
