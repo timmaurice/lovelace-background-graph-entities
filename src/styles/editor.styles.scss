@@ -172,14 +172,6 @@ h4 {
     flex: 1 1 0;
     min-width: 0;
   }
-
-  &.disabled {
-    opacity: 0.5;
-
-    .color-preview {
-      cursor: not-allowed;
-    }
-  }
 }
 
 .color-preview {

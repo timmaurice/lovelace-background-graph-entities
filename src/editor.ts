@@ -574,63 +574,60 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           ></ha-switch>
         </ha-formfield>
 
-        <div class="${entityConf.auto_icon_color ? 'side-by-side' : ''}">
-          ${
-            entityConf.auto_icon_color
-              ? html`
-                  <div class="dropdown-wrapper">
-                    <ha-select
-                      .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
-                      .value=${currentAutoIconColorSource}
-                      .options=${[
-                        { value: 'latest', label: valueSourceLabel('latest') },
-                        { value: 'max', label: valueSourceLabel('max') },
-                        { value: 'min', label: valueSourceLabel('min') },
-                        { value: 'avg', label: valueSourceLabel('avg') },
-                        { value: 'median', label: valueSourceLabel('median') },
-                      ]}
-                      @selected=${(ev: Event) =>
-                        updateEntitySourceField('auto_icon_color_source', (ev as CustomEvent).detail.value)}
-                      @closed=${(ev: Event) => ev.stopPropagation()}
-                    >
-                    </ha-select>
+        <!-- The two are mutually exclusive: with auto colour on, icon_color is only a
+             fallback until history arrives and was already read-only, so showing it
+             greyed out was noise. It stays in the config and comes back on switch-off. -->
+        ${
+          entityConf.auto_icon_color
+            ? html`
+                <div class="dropdown-wrapper">
+                  <ha-select
+                    .label=${localize(this.hass, 'component.bge.editor.auto_icon_color_source')}
+                    .value=${currentAutoIconColorSource}
+                    .options=${[
+                      { value: 'latest', label: valueSourceLabel('latest') },
+                      { value: 'max', label: valueSourceLabel('max') },
+                      { value: 'min', label: valueSourceLabel('min') },
+                      { value: 'avg', label: valueSourceLabel('avg') },
+                      { value: 'median', label: valueSourceLabel('median') },
+                    ]}
+                    @selected=${(ev: Event) =>
+                      updateEntitySourceField('auto_icon_color_source', (ev as CustomEvent).detail.value)}
+                    @closed=${(ev: Event) => ev.stopPropagation()}
+                  >
+                  </ha-select>
+                </div>
+              `
+            : html`
+                <div
+                  class="color-input-wrapper"
+                  data-picker-id="entity_icon_color_${this._editingIndex}"
+                  @mousedown=${(e: MouseEvent) => this._toggleColorPicker(e, `entity_icon_color_${this._editingIndex}`)}
+                >
+                  <ha-input
+                    .label=${localize(this.hass, 'component.bge.editor.icon_color')}
+                    .value=${entityConf.icon_color ?? ''}
+                    .placeholder=${'var(--primary-text-color)'}
+                    data-index=${this._editingIndex}
+                    data-field="icon_color"
+                    @change=${this._entityAttributeChanged}
+                  ></ha-input>
+                  <div class="color-preview" style="background-color: ${finalIconColor}"></div>
+                  <div
+                    class="color-picker-popup"
+                    data-picker-id="entity_icon_color_${this._editingIndex}"
+                    @mousedown=${(e: MouseEvent) => e.stopPropagation()}
+                  >
+                    <hex-color-picker
+                      .color=${finalIconColor}
+                      data-index=${this._editingIndex}
+                      data-field="icon_color"
+                      @color-changed=${this._entityAttributeChanged}
+                    ></hex-color-picker>
                   </div>
-                `
-              : ''
-          }
-
-          <div
-            class="color-input-wrapper ${entityConf.auto_icon_color ? 'disabled' : ''}"
-            data-picker-id="entity_icon_color_${this._editingIndex}"
-            @mousedown=${(e: MouseEvent) =>
-              entityConf.auto_icon_color
-                ? undefined
-                : this._toggleColorPicker(e, `entity_icon_color_${this._editingIndex}`)}
-          >
-            <ha-input
-              .label=${localize(this.hass, 'component.bge.editor.icon_color')}
-              .value=${entityConf.icon_color ?? ''}
-              .placeholder=${'var(--primary-text-color)'}
-              .disabled=${entityConf.auto_icon_color === true}
-              data-index=${this._editingIndex}
-              data-field="icon_color"
-              @change=${this._entityAttributeChanged}
-            ></ha-input>
-            <div class="color-preview" style="background-color: ${finalIconColor}"></div>
-            <div
-              class="color-picker-popup"
-              data-picker-id="entity_icon_color_${this._editingIndex}"
-              @mousedown=${(e: MouseEvent) => e.stopPropagation()}
-            >
-              <hex-color-picker
-                .color=${finalIconColor}
-                data-index=${this._editingIndex}
-                data-field="icon_color"
-                @color-changed=${this._entityAttributeChanged}
-              ></hex-color-picker>
-            </div>
-          </div>
-        </div>
+                </div>
+              `
+        }
 
         <h3>${localize(this.hass, 'component.bge.editor.entity_section_value')}</h3>
         <div class="side-by-side">
