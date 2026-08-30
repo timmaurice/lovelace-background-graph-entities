@@ -1,0 +1,7 @@
+# Keep the host's node_modules out of `COPY . .` — it silently overwrites the
+# image's fresh `npm ci` and breaks Playwright when the host install is stale.
+node_modules
+.git
+playwright-report
+test-results
+test/e2e/screenshots
