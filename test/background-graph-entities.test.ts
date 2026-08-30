@@ -2161,6 +2161,25 @@ describe('BackgroundGraphEntities', () => {
       expect(primary?.textContent?.trim()).toBe('0.40 Mb/s');
     });
 
+    it('should render an extremely small transformed value without throwing', async () => {
+      hass.states['sensor.wan_up'] = {
+        entity_id: 'sensor.wan_up',
+        state: '50',
+        attributes: { friendly_name: 'Upload', unit_of_measurement: 'kB/s' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        // Unclamped, the inferred precision would be 122 — past Intl.NumberFormat's
+        // 100-digit ceiling, which throws and takes the whole row down.
+        entities: [{ entity: 'sensor.wan_up', value_transform: 'x * 1e-123', value_unit: 'Mb/s' }],
+      });
+      await element.updateComplete;
+
+      const primary = element.shadowRoot?.querySelector('.primary-value');
+      expect(primary?.textContent?.trim()).toBe('0.00000000000000000000 Mb/s');
+    });
+
     it('should exclude broken transforms from the title average', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       hass.states['sensor.test1'] = {
