@@ -52,6 +52,7 @@
     "value_transform": "Value Transform",
     "value_transform_helper": "JS expression applied to every value; x is the raw number, e.g. x * 8",
     "value_unit": "Unit Override",
+    "value_unit_hide": "Hide Unit",
     "value_unit_helper": "Replaces the entity's unit in displayed values, e.g. kb/s",
     "graph_entity": "Graph Entity (Optional)",
     "show_graph_entity_state": "Show Graph Entity State",
@@ -64,6 +65,7 @@
     "extra_value_transform": "Extra Value Transform",
     "extra_value_transform_helper": "JS expression applied to the extra value; x is the raw number, e.g. x * 8",
     "extra_value_unit": "Extra Value Unit Override",
+    "extra_value_unit_hide": "Hide Extra Value Unit",
     "extra_value_unit_helper": "Replaces the extra value entity's unit, e.g. Mb/s",
     "curve": "Curve Type",
     "curves": {

@@ -52,6 +52,7 @@
     "value_transform": "Transformation de la valeur",
     "value_transform_helper": "Expression JS appliquée à chaque valeur ; x est la valeur brute, ex. x * 8",
     "value_unit": "Unité personnalisée",
+    "value_unit_hide": "Masquer l'unité",
     "value_unit_helper": "Remplace l'unité dans les valeurs affichées, ex. kb/s",
     "graph_entity": "Entité du graphique (Optionnel)",
     "show_graph_entity_state": "Afficher l'état de l'entité du graphique",
@@ -64,6 +65,7 @@
     "extra_value_transform": "Transformation de la valeur supplémentaire",
     "extra_value_transform_helper": "Expression JS appliquée à la valeur supplémentaire ; x est la valeur brute, ex. x * 8",
     "extra_value_unit": "Unité de la valeur supplémentaire",
+    "extra_value_unit_hide": "Masquer l'unité de la valeur supplémentaire",
     "extra_value_unit_helper": "Remplace l'unité de la valeur supplémentaire, ex. Mb/s",
     "curve": "Type de courbe",
     "curves": {

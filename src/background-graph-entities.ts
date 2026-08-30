@@ -34,6 +34,8 @@ const EDITOR_ELEMENT_NAME = `${ELEMENT_NAME}-editor`;
 const UNAVAILABLE_ICON = 'mdi:alert-circle-outline';
 const UNAVAILABLE_TEXT = 'Unavailable';
 const UNKNOWN_TEXT = 'Unknown';
+// Upper bound for an inferred fraction-digit count handed to Intl.NumberFormat.
+const MAX_FRACTION_DIGITS = 20;
 
 const CURVE_FACTORIES = {
   linear: curveLinear,
@@ -397,10 +399,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   // A shrinking transform (e.g. kB/s → Mb/s) can push a value below the
   // precision inferred from the raw state string ('50' → 0 decimals → '0 Mb/s'),
   // so guarantee two significant digits when the transformed magnitude is < 10.
+  // Clamped because the result feeds Intl.NumberFormat, which throws above 100
+  // fraction digits: an expression like `Math.exp(-x)` would otherwise break the
+  // row instead of degrading. Past ~17 digits a double carries no more precision.
   private _transformPrecisionFloor(value: number): number {
     const abs = Math.abs(value);
     if (!Number.isFinite(value) || abs === 0 || abs >= 10) return 0;
-    return Math.ceil(-Math.log10(abs)) + 1;
+    return Math.min(Math.ceil(-Math.log10(abs)) + 1, MAX_FRACTION_DIGITS);
   }
 
   private _getAutoIconColor(entityConfig: EntityConfig): string | undefined {

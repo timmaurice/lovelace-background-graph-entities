@@ -270,6 +270,27 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     });
   }
 
+  // The switch and the text field share the *_unit key (`false` = no unit at all,
+  // string = override), so switching off deletes it and restores the entity's unit.
+  private _unitHiddenChanged(ev: Event): void {
+    const target = ev.target as HTMLInputElement;
+    const index = Number((target as HTMLElement).dataset.index);
+    const field = (target as HTMLElement).dataset.field as 'value_unit' | 'extra_value_unit';
+    if (isNaN(index) || !field) return;
+
+    const hidden = target.checked;
+
+    this._updateEntityOrGlobalConfig(index, (entityConf) => {
+      const newEntityConf = { ...entityConf } as Partial<EntityConfig>;
+      if (hidden) {
+        newEntityConf[field] = false;
+      } else {
+        delete newEntityConf[field];
+      }
+      return newEntityConf;
+    });
+  }
+
   private _entityAttributeChanged(ev: Event): void {
     const target = ev.target as HTMLElement & { value?: string; type?: string };
     const index = Number(target.dataset.index);
@@ -611,16 +632,30 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                     data-field="extra_value_transform"
                     @change=${this._entityAttributeChanged}
                   ></ha-input>
-                  <ha-input
-                    .label=${localize(this.hass, 'component.bge.editor.extra_value_unit')}
-                    .value=${entityConf.extra_value_unit ?? ''}
-                    .helper=${localize(this.hass, 'component.bge.editor.extra_value_unit_helper')}
-                    helperPersistent
+                  ${
+                    entityConf.extra_value_unit === false
+                      ? ''
+                      : html`
+                          <ha-input
+                            .label=${localize(this.hass, 'component.bge.editor.extra_value_unit')}
+                            .value=${typeof entityConf.extra_value_unit === 'string' ? entityConf.extra_value_unit : ''}
+                            .helper=${localize(this.hass, 'component.bge.editor.extra_value_unit_helper')}
+                            helperPersistent
+                            data-index=${this._editingIndex}
+                            data-field="extra_value_unit"
+                            @change=${this._entityAttributeChanged}
+                          ></ha-input>
+                        `
+                  }
+                </div>
+                <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_unit_hide')}>
+                  <ha-switch
+                    .checked=${entityConf.extra_value_unit === false}
                     data-index=${this._editingIndex}
                     data-field="extra_value_unit"
-                    @change=${this._entityAttributeChanged}
-                  ></ha-input>
-                </div>
+                    @change=${this._unitHiddenChanged}
+                  ></ha-switch>
+                </ha-formfield>
               `
             : ''
         }
@@ -701,16 +736,30 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             data-field="value_transform"
             @change=${this._entityAttributeChanged}
           ></ha-input>
-          <ha-input
-            .label=${localize(this.hass, 'component.bge.editor.value_unit')}
-            .value=${entityConf.value_unit ?? ''}
-            .helper=${localize(this.hass, 'component.bge.editor.value_unit_helper')}
-            helperPersistent
+          ${
+            entityConf.value_unit === false
+              ? ''
+              : html`
+                  <ha-input
+                    .label=${localize(this.hass, 'component.bge.editor.value_unit')}
+                    .value=${typeof entityConf.value_unit === 'string' ? entityConf.value_unit : ''}
+                    .helper=${localize(this.hass, 'component.bge.editor.value_unit_helper')}
+                    helperPersistent
+                    data-index=${this._editingIndex}
+                    data-field="value_unit"
+                    @change=${this._entityAttributeChanged}
+                  ></ha-input>
+                `
+          }
+        </div>
+        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.value_unit_hide')}>
+          <ha-switch
+            .checked=${entityConf.value_unit === false}
             data-index=${this._editingIndex}
             data-field="value_unit"
-            @change=${this._entityAttributeChanged}
-          ></ha-input>
-        </div>
+            @change=${this._unitHiddenChanged}
+          ></ha-switch>
+        </ha-formfield>
 
         ${
           valueSourceAvailable

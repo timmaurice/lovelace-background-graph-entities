@@ -52,6 +52,7 @@
     "value_transform": "Wert-Transformation",
     "value_transform_helper": "JS-Ausdruck, der auf jeden Wert angewendet wird; x ist der Rohwert, z. B. x * 8",
     "value_unit": "Einheit überschreiben",
+    "value_unit_hide": "Einheit ausblenden",
     "value_unit_helper": "Ersetzt die Einheit in angezeigten Werten, z. B. kb/s",
     "graph_entity": "Graph-Entität (Optional)",
     "show_graph_entity_state": "Zustand der Graph-Entität anzeigen",
@@ -64,6 +65,7 @@
     "extra_value_transform": "Zusatzwert-Transformation",
     "extra_value_transform_helper": "JS-Ausdruck, der auf den Zusatzwert angewendet wird; x ist der Rohwert, z. B. x * 8",
     "extra_value_unit": "Zusatzwert-Einheit überschreiben",
+    "extra_value_unit_hide": "Zusatzwert-Einheit ausblenden",
     "extra_value_unit_helper": "Ersetzt die Einheit des Zusatzwerts, z. B. Mb/s",
     "curve": "Kurventyp",
     "curves": {
