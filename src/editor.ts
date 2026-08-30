@@ -538,6 +538,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         <span class="title">${title}</span>
       </div>
       <div class="card-config">
+        <h3>${localize(this.hass, 'component.bge.editor.entity_section_appearance')}</h3>
         <ha-input
           .label=${localize(this.hass, 'component.bge.editor.name')}
           .value=${entityConf.name || ''}
@@ -554,15 +555,6 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           data-field="icon"
           @value-changed=${this._entityAttributeChanged}
         ></ha-icon-picker>
-        <ha-entity-picker
-          .hass=${this.hass}
-          .label=${localize(this.hass, 'component.bge.editor.graph_entity')}
-          .value=${entityConf.graph_entity || ''}
-          .helper=${localize(this.hass, 'component.bge.editor.graph_entity_helper')}
-          data-index=${this._editingIndex}
-          data-field="graph_entity"
-          @value-changed=${this._entityAttributeChanged}
-        ></ha-entity-picker>
 
         <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
           <ha-switch
@@ -573,92 +565,6 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           ></ha-switch>
         </ha-formfield>
 
-        ${
-          entityConf.graph_entity
-            ? html`
-                <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}>
-                  <ha-switch
-                    .checked=${entityConf.show_graph_entity_state === true}
-                    data-index=${this._editingIndex}
-                    data-field="show_graph_entity_state"
-                    @change=${this._entitySwitchChanged}
-                  ></ha-switch>
-                </ha-formfield>
-              `
-            : ''
-        }
-        <ha-entity-picker
-          .hass=${this.hass}
-          .label=${localize(this.hass, 'component.bge.editor.extra_value_entity')}
-          .value=${entityConf.extra_value_entity || ''}
-          .helper=${localize(this.hass, 'component.bge.editor.extra_value_entity_helper')}
-          data-index=${this._editingIndex}
-          data-field="extra_value_entity"
-          @value-changed=${this._entityAttributeChanged}
-        ></ha-entity-picker>
-
-        ${
-          entityConf.extra_value_entity
-            ? html`
-                <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_use_entity_name')}>
-                  <ha-switch
-                    .checked=${entityConf.extra_value_name === true}
-                    data-index=${this._editingIndex}
-                    @change=${this._extraValueUseEntityNameChanged}
-                  ></ha-switch>
-                </ha-formfield>
-                ${
-                  entityConf.extra_value_name === true
-                    ? ''
-                    : html`
-                        <ha-input
-                          .label=${localize(this.hass, 'component.bge.editor.extra_value_name')}
-                          .value=${typeof entityConf.extra_value_name === 'string' ? entityConf.extra_value_name : ''}
-                          .helper=${localize(this.hass, 'component.bge.editor.extra_value_name_helper')}
-                          helperPersistent
-                          data-index=${this._editingIndex}
-                          data-field="extra_value_name"
-                          @change=${this._entityAttributeChanged}
-                        ></ha-input>
-                      `
-                }
-                <div class="side-by-side">
-                  <ha-input
-                    .label=${localize(this.hass, 'component.bge.editor.extra_value_transform')}
-                    .value=${entityConf.extra_value_transform ?? ''}
-                    .helper=${localize(this.hass, 'component.bge.editor.extra_value_transform_helper')}
-                    helperPersistent
-                    data-index=${this._editingIndex}
-                    data-field="extra_value_transform"
-                    @change=${this._entityAttributeChanged}
-                  ></ha-input>
-                  ${
-                    entityConf.extra_value_unit === false
-                      ? ''
-                      : html`
-                          <ha-input
-                            .label=${localize(this.hass, 'component.bge.editor.extra_value_unit')}
-                            .value=${typeof entityConf.extra_value_unit === 'string' ? entityConf.extra_value_unit : ''}
-                            .helper=${localize(this.hass, 'component.bge.editor.extra_value_unit_helper')}
-                            helperPersistent
-                            data-index=${this._editingIndex}
-                            data-field="extra_value_unit"
-                            @change=${this._entityAttributeChanged}
-                          ></ha-input>
-                        `
-                  }
-                </div>
-                <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_unit_hide')}>
-                  <ha-switch
-                    .checked=${entityConf.extra_value_unit === false}
-                    data-index=${this._editingIndex}
-                    data-field="extra_value_unit"
-                    @change=${this._unitHiddenChanged}
-                  ></ha-switch>
-                </ha-formfield>
-              `
-            : ''
-        }
         <ha-formfield .label=${localize(this.hass, 'component.bge.editor.auto_icon_color')}>
           <ha-switch
             .checked=${entityConf.auto_icon_color === true}
@@ -726,6 +632,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           </div>
         </div>
 
+        <h3>${localize(this.hass, 'component.bge.editor.entity_section_value')}</h3>
         <div class="side-by-side">
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.value_transform')}
@@ -796,15 +703,134 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             : ''
         }
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.optional_overrides')}>
-          <ha-switch
-            .checked=${overwriteAppearance}
-            data-index=${this._editingIndex}
-            @change=${this._overwriteAppearanceChanged}
-          ></ha-switch>
-        </ha-formfield>
+        <!-- Collapsed unless the row already uses the section, so existing config is never hidden. -->
+        <ha-expansion-panel
+          outlined
+          .header=${localize(this.hass, 'component.bge.editor.entity_section_extra_value')}
+          .expanded=${!!entityConf.extra_value_entity}
+        >
+          <div class="panel-content">
+            <ha-entity-picker
+              .hass=${this.hass}
+              .label=${localize(this.hass, 'component.bge.editor.extra_value_entity')}
+              .value=${entityConf.extra_value_entity || ''}
+              .helper=${localize(this.hass, 'component.bge.editor.extra_value_entity_helper')}
+              data-index=${this._editingIndex}
+              data-field="extra_value_entity"
+              @value-changed=${this._entityAttributeChanged}
+            ></ha-entity-picker>
 
-        ${overwriteAppearance ? this._renderEntityGraphAppearanceEditor(this._editingIndex) : ''}
+            ${
+              entityConf.extra_value_entity
+                ? html`
+                    <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_use_entity_name')}>
+                      <ha-switch
+                        .checked=${entityConf.extra_value_name === true}
+                        data-index=${this._editingIndex}
+                        @change=${this._extraValueUseEntityNameChanged}
+                      ></ha-switch>
+                    </ha-formfield>
+                    ${
+                      entityConf.extra_value_name === true
+                        ? ''
+                        : html`
+                            <ha-input
+                              .label=${localize(this.hass, 'component.bge.editor.extra_value_name')}
+                              .value=${
+                                typeof entityConf.extra_value_name === 'string' ? entityConf.extra_value_name : ''
+                              }
+                              .helper=${localize(this.hass, 'component.bge.editor.extra_value_name_helper')}
+                              helperPersistent
+                              data-index=${this._editingIndex}
+                              data-field="extra_value_name"
+                              @change=${this._entityAttributeChanged}
+                            ></ha-input>
+                          `
+                    }
+                    <div class="side-by-side">
+                      <ha-input
+                        .label=${localize(this.hass, 'component.bge.editor.extra_value_transform')}
+                        .value=${entityConf.extra_value_transform ?? ''}
+                        .helper=${localize(this.hass, 'component.bge.editor.extra_value_transform_helper')}
+                        helperPersistent
+                        data-index=${this._editingIndex}
+                        data-field="extra_value_transform"
+                        @change=${this._entityAttributeChanged}
+                      ></ha-input>
+                      ${
+                        entityConf.extra_value_unit === false
+                          ? ''
+                          : html`
+                              <ha-input
+                                .label=${localize(this.hass, 'component.bge.editor.extra_value_unit')}
+                                .value=${
+                                  typeof entityConf.extra_value_unit === 'string' ? entityConf.extra_value_unit : ''
+                                }
+                                .helper=${localize(this.hass, 'component.bge.editor.extra_value_unit_helper')}
+                                helperPersistent
+                                data-index=${this._editingIndex}
+                                data-field="extra_value_unit"
+                                @change=${this._entityAttributeChanged}
+                              ></ha-input>
+                            `
+                      }
+                    </div>
+                    <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_unit_hide')}>
+                      <ha-switch
+                        .checked=${entityConf.extra_value_unit === false}
+                        data-index=${this._editingIndex}
+                        data-field="extra_value_unit"
+                        @change=${this._unitHiddenChanged}
+                      ></ha-switch>
+                    </ha-formfield>
+                  `
+                : ''
+            }
+          </div>
+        </ha-expansion-panel>
+
+        <ha-expansion-panel
+          outlined
+          .header=${localize(this.hass, 'component.bge.editor.entity_section_graph')}
+          .expanded=${!!entityConf.graph_entity || overwriteAppearance}
+        >
+          <div class="panel-content">
+            <ha-entity-picker
+              .hass=${this.hass}
+              .label=${localize(this.hass, 'component.bge.editor.graph_entity')}
+              .value=${entityConf.graph_entity || ''}
+              .helper=${localize(this.hass, 'component.bge.editor.graph_entity_helper')}
+              data-index=${this._editingIndex}
+              data-field="graph_entity"
+              @value-changed=${this._entityAttributeChanged}
+            ></ha-entity-picker>
+
+            ${
+              entityConf.graph_entity
+                ? html`
+                    <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}>
+                      <ha-switch
+                        .checked=${entityConf.show_graph_entity_state === true}
+                        data-index=${this._editingIndex}
+                        data-field="show_graph_entity_state"
+                        @change=${this._entitySwitchChanged}
+                      ></ha-switch>
+                    </ha-formfield>
+                  `
+                : ''
+            }
+
+            <ha-formfield .label=${localize(this.hass, 'component.bge.editor.optional_overrides')}>
+              <ha-switch
+                .checked=${overwriteAppearance}
+                data-index=${this._editingIndex}
+                @change=${this._overwriteAppearanceChanged}
+              ></ha-switch>
+            </ha-formfield>
+
+            ${overwriteAppearance ? this._renderEntityGraphAppearanceEditor(this._editingIndex) : ''}
+          </div>
+        </ha-expansion-panel>
       </div>
     `;
   }

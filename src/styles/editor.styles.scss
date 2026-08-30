@@ -93,6 +93,14 @@ ha-expansion-panel {
   }
 }
 
+// The panel is not a .card-config child, so it needs the column gap of its own.
+.panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: var(--bge-editor-spacing);
+}
+
 .overrides {
   display: flex;
   flex-direction: column;
