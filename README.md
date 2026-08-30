@@ -301,6 +301,14 @@ shows the raw state. Set a unit override to `false` to show the number with no u
 broken expression logs a console warning and the affected value falls back to the raw number _and_
 raw unit.
 
+> [!WARNING]
+> `value_transform` and `extra_value_transform` run as **real JavaScript** in the browser of
+> everyone who views the dashboard — not just arithmetic on `x`. An expression can reach anything
+> the page can, including your Home Assistant session tokens. Only use expressions you wrote or
+> have read and understood. Treat a card config copied from a forum, a blog, or a chat the way you
+> would treat a script someone asked you to run: read the transforms before you paste it. The same
+> trust model applies to `apexcharts-card`'s `transform`.
+
 ```yaml
 type: custom:background-graph-entities
 title: Network
