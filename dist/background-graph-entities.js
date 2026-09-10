@@ -549,7 +549,7 @@ const ce={attribute:!0,type:String,converter:b,reflect:!1,hasChanged:x},ue=(e=ce
           ${Go(this.hass,"component.bge.editor.add_threshold")}
         </ha-button>
       </div>
-    `:j``}render(){return this.hass&&this._config?null!==this._editingIndex?this._renderEntityEditor():this._renderMainConfig():j`<div>Waiting for config…</div>`}_renderMainConfig(){const e=(this._config.color_thresholds?.length??0)>0?"threshold":"single",t=this.hass.themes?.darkMode??!1?"white":"black";return j`
+    `:j``}render(){return this.hass?null!==this._editingIndex?this._renderEntityEditor():this._renderMainConfig():j`<ha-circular-progress indeterminate></ha-circular-progress>`}_renderMainConfig(){const e=(this._config.color_thresholds?.length??0)>0?"threshold":"single",t=this.hass.themes?.darkMode??!1?"white":"black";return j`
       <div class="card-config">
         <h3>${Go(this.hass,"component.bge.editor.general")}</h3>
         <div class="side-by-side">

@@ -1048,11 +1048,11 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   }
 
   protected render(): TemplateResult {
-    if (!this.hass || !this._config) {
-      // Unreachable with `hass` set: `_config` is initialised above, so this only
-      // renders before Home Assistant hands the editor its `hass` - which is
-      // exactly when `localize` has no language to resolve against.
-      return html`<div>Waiting for config…</div>`;
+    if (!this.hass) {
+      // The one frame that renders before Home Assistant hands over `hass`, which
+      // `localize` needs to exist at all. Nothing here can be translated, so it
+      // must not be words: English prose reached a German dashboard's editor.
+      return html`<ha-circular-progress indeterminate></ha-circular-progress>`;
     }
 
     if (this._editingIndex !== null) {

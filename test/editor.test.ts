@@ -398,18 +398,25 @@ describe('BackgroundGraphEntitiesEditor', () => {
     });
   });
 
-  describe('Placeholder while the editor waits for hass', () => {
-    it('is the only render that has no hass to localize against', async () => {
+  describe('The frame before hass arrives', () => {
+    it('shows no untranslatable prose, because there is no hass to localize with', async () => {
       const bare = document.createElement('background-graph-entities-editor') as EditorType;
       document.body.appendChild(bare);
       await bare.updateComplete;
-      expect(bare.shadowRoot?.textContent).toContain('Waiting for config');
-      bare.remove();
 
-      // With hass set the placeholder is gone: `_config` is initialised at
-      // declaration, so the branch only fires before hass arrives.
+      // English prose here reached a German dashboard's editor DOM. It cannot be
+      // localized without `hass`, so it must not be words at all.
+      expect(bare.shadowRoot?.textContent?.trim()).toBe('');
+      expect(bare.shadowRoot?.querySelector('ha-circular-progress')).not.toBeNull();
+      bare.remove();
+    });
+
+    it('renders the real editor as soon as hass is there, config or not', async () => {
+      // `_config` is initialised at declaration and `setConfig` throws before
+      // assigning, so a missing `_config` never gates this render - only `hass`.
       await editor.updateComplete;
-      expect(editor.shadowRoot?.textContent).not.toContain('Waiting for config');
+      expect(editor.shadowRoot?.querySelector('ha-circular-progress')).toBeNull();
+      expect(field('hours_to_show')).toBeTruthy();
     });
   });
 });
