@@ -54,8 +54,13 @@ const UNKNOWN_KEY = 'component.bge.card.unknown';
 // Upper bound for an inferred fraction-digit count handed to Intl.NumberFormat.
 const MAX_FRACTION_DIGITS = 20;
 
-// `not_found` is deliberately absent: it keeps Home Assistant's own
-// "Unavailable" wording, which is what the card has always shown.
+// Only `not_configured` reaches this map today. `not_found` is listed but never
+// read - _renderProblemRow branches to Home Assistant's own "Unavailable"
+// wording for it, which is what the card has always shown - and `wrong_domain`
+// and `not_numeric` cannot be produced at all, because the render path calls
+// resolveEntity() without the options that raise them. The entries stay because
+// the Record type demands one per reason; they become live the moment a caller
+// passes `domains` or `numeric`.
 const PROBLEM_MESSAGE_KEYS: Record<EntityProblem, string> = {
   not_configured: 'no_entity',
   not_found: 'not_found',
