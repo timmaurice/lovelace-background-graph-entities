@@ -358,6 +358,44 @@ describe('BackgroundGraphEntitiesEditor', () => {
       change(field('graph_min'), '-20');
       expect(lastConfig().graph_min).toBe(-20);
     });
+
+    it('stores a global number field as a number, not as the raw input string', () => {
+      // Lit renders `type="number"` as an attribute, not as the property HA's
+      // own field exposes. Reading only the property stored `"12"`, and the card
+      // gates on `typeof === 'number'`.
+      change(field('hours_to_show'), '12');
+      expect(typeof lastConfig().hours_to_show).toBe('number');
+    });
+  });
+
+  describe('Per-entity numeric fields', () => {
+    const openEntityEditor = async (): Promise<void> => {
+      editor.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test', overwrite_graph_appearance: true }],
+      });
+      (editor as unknown as { _editEntity(index: number): void })._editEntity(0);
+      await editor.updateComplete;
+    };
+
+    it('stores a per-entity graph bound as a number, not as the raw input string', async () => {
+      // The twin of the global handler, and the one the coercion missed: the
+      // card drops a bound that is not a number, so a bound set here never
+      // reached the graph at all.
+      await openEntityEditor();
+      change(fieldByDataField('graph_min'), '-20');
+
+      const entity = lastConfig().entities[0] as { graph_min?: number };
+      expect(entity.graph_min).toBe(-20);
+      expect(typeof entity.graph_min).toBe('number');
+    });
+
+    it('stores a per-entity upper bound as a number too', async () => {
+      await openEntityEditor();
+      change(fieldByDataField('graph_max'), '80');
+
+      expect((lastConfig().entities[0] as { graph_max?: number }).graph_max).toBe(80);
+    });
   });
 
   describe('Placeholder while the editor waits for hass', () => {

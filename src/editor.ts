@@ -321,7 +321,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
     let value: string | number | undefined = (ev as CustomEvent).detail?.value ?? target.value;
 
-    if (target.tagName.toLowerCase() === 'ha-slider' || target.type === 'number') {
+    // Same two-way `type` read as the global handler: reading only the property
+    // stored the per-entity graph bounds as strings, which the card then dropped.
+    if (
+      target.tagName.toLowerCase() === 'ha-slider' ||
+      target.type === 'number' ||
+      target.getAttribute('type') === 'number'
+    ) {
       value = target.value === '' ? undefined : Number(target.value);
     }
     // Trailing whitespace forces the YAML dumper into quoted style and pollutes
