@@ -757,9 +757,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // keyboard too. Keys that reach a nested control (the icon toggle, the
     // switch) are left alone - those bring their own handlers.
     const rowLabel = entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity;
-    const toggleLabel = localize(this.hass, 'component.bge.card.toggle_entity', {
-      name: entityConfig.name || entityConfig.entity,
-    });
+    // The same name the row shows: skipping `friendly_name` made a row reading
+    // "Test Switch" announce itself as "switch.test".
+    const toggleLabel = localize(this.hass, 'component.bge.card.toggle_entity', { name: rowLabel });
     const handleRowKeydown = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
       if (e.target !== e.currentTarget) return;

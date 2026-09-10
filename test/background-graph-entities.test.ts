@@ -3922,12 +3922,23 @@ describe('BackgroundGraphEntities', () => {
       expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('1 Std. 15 Min.');
     });
 
-    it('translates the toggle aria-label', async () => {
+    it('names the toggle the way the row names it, translated', async () => {
+      // The label skipped `friendly_name`, so a row reading "Test Switch"
+      // announced itself to a screen reader as "switch.test umschalten".
       hass.states['switch.test'] = {
         entity_id: 'switch.test',
         state: 'on',
         attributes: { friendly_name: 'Test Switch' },
       };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: [{ entity: 'switch.test' }] });
+      element.hass = { ...hass, language: 'de' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('ha-switch')?.getAttribute('aria-label')).toBe('Test Switch umschalten');
+    });
+
+    it('falls back to the entity id when the entity has no name at all', async () => {
+      hass.states['switch.test'] = { entity_id: 'switch.test', state: 'on', attributes: {} };
       element.setConfig({ type: 'custom:background-graph-entities', entities: [{ entity: 'switch.test' }] });
       element.hass = { ...hass, language: 'de' };
       await element.updateComplete;
