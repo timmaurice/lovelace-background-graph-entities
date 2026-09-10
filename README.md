@@ -108,7 +108,7 @@ The card is fully configurable through the UI editor.
 | `graph_min`        | number  | `undefined`  | Sets a fixed lower bound for the Y-axis of the graph.                                                                                                                                                                                                                                                                                                                |
 | `graph_max`        | number  | `undefined`  | Sets a fixed upper bound for the Y-axis of the graph.                                                                                                                                                                                                                                                                                                                |
 | `points_per_hour`  | number  | `1`          | The number of time buckets per hour. The card calculates the median value for each bucket and fills in any gaps with the last known value to create a continuous graph (unless `show_gaps` is enabled). Higher values provide more detail but may impact performance.                                                                                                |
-| `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes).                                                                                                                                                                                                                                                                                                |
+| `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes). Set to `0` to never refresh.                                                                                                                                                                                                                                                                   |
 | `show_icon`        | boolean | `true`       | Set to `false` to hide the entity icon.                                                                                                                                                                                                                                                                                                                              |
 | `sort`             | object  | `undefined`  | Optional settings to auto-sort the entity list dynamically. See [Sorting Configuration](#sorting-configuration) below.                                                                                                                                                                                                                                               |
 
@@ -397,7 +397,11 @@ To contribute to the development, you'll need to set up a build environment.
     npm run demo
     ```
 
-    Then, open your browser and navigate to `http://localhost:3000/demo/index.html`.
+    Then, open your browser and navigate to `http://localhost:3000/demo/`.
+
+    > Keep the trailing slash. `serve` rewrites `/demo/index.html` to `/demo`, and from
+    > there the page's relative `mocks.js` and `main.js` resolve against the site root
+    > and 404, so the demo comes up empty.
 
     For a complete development environment (build watcher + demo server):
 
