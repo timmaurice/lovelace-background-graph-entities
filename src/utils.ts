@@ -6,6 +6,16 @@ export const MIN_IN_H = 60;
 export const MS_IN_H = MIN_IN_H * S_IN_MIN * MS_IN_S;
 
 /**
+ * Config numbers that describe a size or a window are only usable above zero.
+ * The card read them as `config.value || DEFAULT`, which let a negative through
+ * - `hours_to_show: -5` opened a window that ended before it started and drew
+ * nothing at all.
+ */
+export function positiveOr(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/**
  * Downsamples historical data into evenly spaced buckets using a time-weighted average.
  *
  * Samples with a non-finite value represent `unavailable`/`unknown` periods (the

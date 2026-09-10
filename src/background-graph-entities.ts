@@ -20,6 +20,7 @@ import {
   formatNumber,
   MS_IN_H,
   MS_IN_S,
+  positiveOr,
   S_IN_MIN,
   ValueTransform,
 } from './utils.js';
@@ -188,8 +189,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   private _setupUpdateInterval(): void {
     if (this._timerId) clearInterval(this._timerId);
     if (!this._config) return;
-    // `?? ` not `||`: an explicit 0 is the documented way to switch refreshing off.
-    const interval = this._config.update_interval ?? DEFAULT_UPDATE_INTERVAL;
+    // An explicit 0 is the documented way to switch refreshing off; anything
+    // negative is not a shorter interval but a typo, so it falls back instead.
+    const configured = this._config.update_interval;
+    const interval = configured === 0 ? 0 : positiveOr(configured, DEFAULT_UPDATE_INTERVAL);
     if (interval > 0) this._timerId = window.setInterval(() => this._fetchAndStoreAllHistory(), interval * MS_IN_S);
   }
 
@@ -1031,7 +1034,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
+    const hoursToShow = positiveOr(this._config?.hours_to_show, DEFAULT_HOURS_TO_SHOW);
     const end = new Date();
     // Elapsed hours, not wall-clock hours: `setHours` moves by calendar hour, so
     // across a DST switch the axis covered 23 or 25 real hours while the buckets
@@ -1091,7 +1094,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'none');
 
-    const lineWidth = this._config?.line_width || DEFAULT_LINE_WIDTH;
+    const lineWidth = positiveOr(this._config?.line_width, DEFAULT_LINE_WIDTH);
     const lineOpacity =
       entityConfig?.overwrite_graph_appearance && entityConfig.line_opacity !== undefined
         ? entityConfig.line_opacity
@@ -1175,8 +1178,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const result: HistoryMap = new Map();
     if (!this.hass?.callWS || entityIds.length === 0) return result;
 
-    const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
-    const pointsPerHour = this._config?.points_per_hour || DEFAULT_POINTS_PER_HOUR;
+    const hoursToShow = positiveOr(this._config?.hours_to_show, DEFAULT_HOURS_TO_SHOW);
+    const pointsPerHour = positiveOr(this._config?.points_per_hour, DEFAULT_POINTS_PER_HOUR);
     const end = new Date();
     // Same elapsed-hours arithmetic as the axis and the bucket grid, so all
     // three describe the same window across a DST switch.

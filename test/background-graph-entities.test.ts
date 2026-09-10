@@ -3581,4 +3581,82 @@ describe('BackgroundGraphEntities', () => {
       await expect(import('../src/editor')).resolves.toBeDefined();
     });
   });
+
+  describe('Non-positive config numbers', () => {
+    const windowCalls = () =>
+      (hass.callWS as Mock).mock.calls.filter(([message]) => message?.type === 'history/history_during_period') as [
+        { start_time: string; end_time: string },
+      ][];
+
+    /** Hours between the requested window's bounds. */
+    const requestedHours = (): number => {
+      const [message] = windowCalls()[0];
+      return (new Date(message.end_time).getTime() - new Date(message.start_time).getTime()) / 3_600_000;
+    };
+
+    it('falls back to the default when hours_to_show is negative', async () => {
+      element.hass = hass;
+      // `hours_to_show || DEFAULT` let -5 through, so the window ended before it
+      // started and the card drew an empty graph with no hint why.
+      element.setConfig({ ...config, hours_to_show: -5 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(requestedHours()).toBeCloseTo(24, 5);
+    });
+
+    it('falls back to the default when hours_to_show is zero', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 0 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(requestedHours()).toBeCloseTo(24, 5);
+    });
+
+    it('falls back to the default line width when line_width is negative', async () => {
+      vi.useFakeTimers();
+      try {
+        const now = new Date('2023-01-01T12:00:00Z');
+        vi.setSystemTime(now);
+        (hass.callWS as Mock).mockResolvedValue({
+          'sensor.test': [
+            { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '5' },
+            { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '15' },
+          ],
+        });
+        element.hass = hass;
+        element.setConfig({ ...config, line_width: -2, hours_to_show: 2, points_per_hour: 1 });
+        await element.updateComplete;
+        await element.updateComplete;
+        await flushFrames();
+
+        const path = element.shadowRoot?.querySelector('.graph-path');
+        expect(path, 'Graph path should exist').not.toBeNull();
+        // A negative stroke width is not a thinner line, it is invalid SVG - d3
+        // wrote `stroke-width="-2"` out verbatim.
+        expect(path?.getAttribute('stroke-width')).toBe('3');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps refreshing on the default interval when update_interval is negative', async () => {
+      vi.useFakeTimers();
+      try {
+        element.hass = hass;
+        element.setConfig({ ...config, update_interval: -30 });
+        await element.updateComplete;
+        await element.updateComplete;
+        const before = (hass.callWS as Mock).mock.calls.length;
+
+        // `interval > 0` silently swallowed a negative value, which switched
+        // refreshing off just as effectively as the documented 0.
+        await vi.advanceTimersByTimeAsync(600 * 1000 + 10);
+        expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

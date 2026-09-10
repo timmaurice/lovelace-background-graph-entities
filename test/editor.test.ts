@@ -18,6 +18,7 @@ interface EditorInput extends HTMLElement {
   value?: string | number;
   placeholder?: string;
   checked?: boolean;
+  type?: string;
 }
 
 describe('BackgroundGraphEntitiesEditor', () => {
@@ -306,6 +307,53 @@ describe('BackgroundGraphEntitiesEditor', () => {
       sortChange('sort_method', 'name');
       sortChange('sort_numeric', true, 'ha-switch');
       expect(lastConfig().sort).toEqual({ method: 'name' });
+    });
+  });
+
+  describe('Numeric bounds', () => {
+    beforeEach(async () => {
+      editor.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      await editor.updateComplete;
+    });
+
+    it('stops the spinners at a usable minimum', () => {
+      // Bare `type="number"` fields let a user spin down past zero, and the card
+      // read `hours_to_show || DEFAULT`, so -5 drew an empty graph.
+      expect(field('hours_to_show').getAttribute('min')).toBe('1');
+      expect(field('line_width').getAttribute('min')).toBe('1');
+      expect(field('points_per_hour').getAttribute('min')).toBe('1');
+      // 0 is the documented way to switch refreshing off, so it stays reachable.
+      expect(field('update_interval').getAttribute('min')).toBe('0');
+    });
+
+    it('clamps a typed negative hour count to the minimum', () => {
+      change(field('hours_to_show'), '-5');
+      expect(lastConfig().hours_to_show).toBe(1);
+    });
+
+    it('clamps a typed zero to the minimum', () => {
+      change(field('points_per_hour'), '0');
+      expect(lastConfig().points_per_hour).toBe(1);
+    });
+
+    it('still allows switching refreshing off', () => {
+      change(field('update_interval'), '0');
+      expect(lastConfig().update_interval).toBe(0);
+    });
+
+    it('clamps a negative update interval to off', () => {
+      change(field('update_interval'), '-30');
+      expect(lastConfig().update_interval).toBe(0);
+    });
+
+    it('keeps a value the user legitimately typed', () => {
+      change(field('hours_to_show'), '48');
+      expect(lastConfig().hours_to_show).toBe(48);
+    });
+
+    it('leaves the graph bounds free to go negative', () => {
+      change(field('graph_min'), '-20');
+      expect(lastConfig().graph_min).toBe(-20);
     });
   });
 });

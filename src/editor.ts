@@ -222,8 +222,17 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         value = target.value;
       }
 
-      if (target.type === 'number') {
+      // `type` is a property on HA's inputs but a plain attribute here, so both
+      // are checked - otherwise a number field would be read as free text.
+      if (target.type === 'number' || target.getAttribute('type') === 'number') {
         value = target.value === '' ? undefined : Number(target.value);
+        // `min` is only a browser hint: HA's text field still fires `change` for
+        // an out-of-range value, and the card read `hours_to_show || DEFAULT`,
+        // so a typed `-5` silently produced an empty graph.
+        const min = target.getAttribute('min');
+        if (min !== null && typeof value === 'number' && !isNaN(value) && value < Number(min)) {
+          value = Number(min);
+        }
       }
 
       // An empty field means "unset", not `''`. Writing the empty string back
@@ -1089,6 +1098,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.hours_to_show')}
             type="number"
+            min="1"
             .value=${this._config.hours_to_show ?? ''}
             .placeholder=${'24'}
             .configValue=${'hours_to_show'}
@@ -1098,6 +1108,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.line_width')}
             type="number"
+            min="1"
             .value=${this._config.line_width ?? ''}
             .placeholder=${'3'}
             .configValue=${'line_width'}
@@ -1335,6 +1346,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.points_per_hour')}
             type="number"
+            min="1"
             .value=${this._config.points_per_hour ?? ''}
             .placeholder=${'1'}
             .configValue=${'points_per_hour'}
@@ -1343,6 +1355,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.update_interval')}
             type="number"
+            min="0"
             .value=${this._config.update_interval ?? ''}
             .placeholder=${'600'}
             .configValue=${'update_interval'}
