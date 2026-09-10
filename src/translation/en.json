@@ -91,5 +91,11 @@
     },
     "sort_reverse": "Reverse Order",
     "sort_numeric": "Numeric Sorting"
+  },
+  "card": {
+    "no_entity": "No entity configured",
+    "not_found": "Entity not found",
+    "wrong_domain": "Unsupported entity type",
+    "not_numeric": "No numeric history"
   }
 }

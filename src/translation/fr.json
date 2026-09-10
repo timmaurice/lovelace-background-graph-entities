@@ -91,5 +91,11 @@
     },
     "sort_reverse": "Inverser l'ordre",
     "sort_numeric": "Tri numérique"
+  },
+  "card": {
+    "no_entity": "Aucune entité configurée",
+    "not_found": "Entité introuvable",
+    "wrong_domain": "Type d'entité non pris en charge",
+    "not_numeric": "Aucun historique numérique"
   }
 }

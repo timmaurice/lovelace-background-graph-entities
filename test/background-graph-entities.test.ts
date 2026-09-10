@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, Mock, beforeAll } from
 import { HomeAssistant, BackgroundGraphEntitiesConfig } from '../src/types';
 import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../src/background-graph-entities';
 import { compileValueTransform, downsampleHistory, formatNumber } from '../src/utils';
+import { resolveEntity } from '../src/entity';
 
 // Mock console.info before the module is imported to prevent version logging.
 vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -2933,6 +2934,86 @@ describe('BackgroundGraphEntities', () => {
       );
       // temp_a has max=50, temp_b has max=30. In reverse numeric sort: temp_a (Z Temperature) is first
       expect(names).toEqual(['Z Temperature', 'A Temperature']);
+    });
+  });
+
+  describe('Entity resolution', () => {
+    it('names a row that has no entity key at all', () => {
+      expect(resolveEntity(hass, undefined)).toEqual({ ok: false, reason: 'not_configured' });
+      expect(resolveEntity(hass, '  ')).toEqual({ ok: false, reason: 'not_configured' });
+    });
+
+    it('names an entity that is not in hass', () => {
+      expect(resolveEntity(hass, 'sensor.nope')).toEqual({
+        ok: false,
+        entityId: 'sensor.nope',
+        reason: 'not_found',
+      });
+    });
+
+    it('names an unavailable entity', () => {
+      hass.states['sensor.gone'] = { entity_id: 'sensor.gone', state: 'unavailable', attributes: {} };
+      expect(resolveEntity(hass, 'sensor.gone').ok).toBe(false);
+      expect(resolveEntity(hass, 'sensor.gone')).toMatchObject({ reason: 'unavailable' });
+    });
+
+    it('names an entity from a domain the caller does not accept', () => {
+      hass.states['light.lamp'] = { entity_id: 'light.lamp', state: 'on', attributes: {} };
+      expect(resolveEntity(hass, 'light.lamp', { domains: ['sensor'] })).toMatchObject({ reason: 'wrong_domain' });
+      expect(resolveEntity(hass, 'sensor.test', { domains: ['sensor'] }).ok).toBe(true);
+    });
+
+    it('names a non-numeric entity only when the caller asked for numbers', () => {
+      hass.states['sun.sun'] = { entity_id: 'sun.sun', state: 'above_horizon', attributes: {} };
+      expect(resolveEntity(hass, 'sun.sun').ok).toBe(true);
+      expect(resolveEntity(hass, 'sun.sun', { numeric: true })).toMatchObject({ reason: 'not_numeric' });
+    });
+
+    it('accepts on/off as numeric, because the card graphs it as 1/0', () => {
+      hass.states['switch.ac'] = { entity_id: 'switch.ac', state: 'off', attributes: {} };
+      expect(resolveEntity(hass, 'switch.ac', { numeric: true }).ok).toBe(true);
+    });
+
+    it('resolves a healthy entity to its state object', () => {
+      const resolved = resolveEntity(hass, 'sensor.test');
+      expect(resolved.ok).toBe(true);
+      expect(resolved.ok && resolved.stateObj.state).toBe('123');
+    });
+
+    it('survives a hass that has not arrived yet', () => {
+      expect(resolveEntity(undefined, 'sensor.test')).toMatchObject({ reason: 'not_found' });
+    });
+  });
+
+  describe('Rows the card cannot resolve', () => {
+    it('should render a warning row instead of crashing on a missing entity key', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        // A row without `entity` - hand-written YAML, or a half-filled editor row.
+        entities: [{ name: 'Half-filled row' } as unknown as string, 'sensor.test'],
+        sort: { method: 'name' },
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const rows = element.shadowRoot?.querySelectorAll('.entity-row');
+      expect(rows).toHaveLength(2);
+      const warning = element.shadowRoot?.querySelector('.entity-row.unavailable');
+      expect(warning?.querySelector('.entity-value')?.textContent?.trim()).toBe('No entity configured');
+      // Nothing to graph, so no container that the graph renderer could trip over.
+      expect(warning?.querySelector('.graph-container')).toBeNull();
+    });
+
+    it('should not throw while sorting a row without an entity key', () => {
+      element.hass = hass;
+      // No name either, so the name comparator really does reach `undefined`,
+      // and second in the list so it lands on the left-hand side of a compare.
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.test', {} as unknown as string],
+        sort: { method: 'name' },
+      });
+      expect(() => (element as unknown as { _getSortedEntities(): unknown })._getSortedEntities()).not.toThrow();
     });
   });
 

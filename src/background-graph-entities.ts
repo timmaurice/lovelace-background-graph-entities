@@ -16,6 +16,8 @@ import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, Curve
 import styles from './styles/card.styles.scss';
 import { compileValueTransform, downsampleHistory, formatNumber, MS_IN_S, S_IN_MIN, ValueTransform } from './utils.js';
 import { extent, max as d3max, min as d3min } from 'd3-array';
+import { EntityProblem, resolveEntity } from './entity.js';
+import { localize } from './localize.js';
 
 // Default configuration values
 const DEFAULT_HOURS_TO_SHOW = 24;
@@ -39,6 +41,16 @@ const UNAVAILABLE_TEXT = 'Unavailable';
 const UNKNOWN_TEXT = 'Unknown';
 // Upper bound for an inferred fraction-digit count handed to Intl.NumberFormat.
 const MAX_FRACTION_DIGITS = 20;
+
+// `not_found` is deliberately absent: it keeps Home Assistant's own
+// "Unavailable" wording, which is what the card has always shown.
+const PROBLEM_MESSAGE_KEYS: Record<EntityProblem, string> = {
+  not_configured: 'no_entity',
+  not_found: 'not_found',
+  wrong_domain: 'wrong_domain',
+  unavailable: 'no_entity',
+  not_numeric: 'not_numeric',
+};
 
 const CURVE_FACTORIES = {
   linear: curveLinear,
@@ -216,8 +228,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         // different transforms/appearance, and find-by-id would give them all
         // the first row's config.
         const indexed = this._entities[Number(container.dataset.entityIndex)];
-        const entityConfig =
-          indexed?.entity === entityId ? indexed : this._entities.find((e) => e.entity === entityId)!;
+        const entityConfig = indexed?.entity === entityId ? indexed : this._entities.find((e) => e.entity === entityId);
+        if (!entityConfig) return;
         const graphEntityId = entityConfig.graph_entity || entityId;
         const historyData = this._history.get(graphEntityId);
         // Transform here rather than at fetch time: stored history can be shared
@@ -468,8 +480,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       let comparison = 0;
 
       if (method === 'name') {
-        const nameA = a.name || stateObjA?.attributes.friendly_name || a.entity;
-        const nameB = b.name || stateObjB?.attributes.friendly_name || b.entity;
+        // `|| ''` because a row can be missing its `entity` key entirely, and
+        // `undefined.localeCompare` took the whole card down.
+        const nameA = a.name || stateObjA?.attributes.friendly_name || a.entity || '';
+        const nameB = b.name || stateObjB?.attributes.friendly_name || b.entity || '';
         comparison = nameA.localeCompare(nameB, this.hass.language || 'en', {
           sensitivity: 'base',
           numeric: numeric,
@@ -615,8 +629,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   private _renderEntityRow(entityConfig: EntityConfig): TemplateResult {
+    const resolved = resolveEntity(this.hass, entityConfig.entity);
+    // `unavailable`/`unknown` keep a normal row: the value column localises the
+    // state, which tells the user more than a warning row would. Everything else
+    // is a configuration problem the row has to name.
+    if (!resolved.ok && resolved.reason !== 'unavailable') {
+      return this._renderProblemRow(entityConfig, resolved.reason);
+    }
     const stateObj = this.hass.states[entityConfig.entity];
-    if (!stateObj) return this._renderUnavailableEntityRow(entityConfig);
     const entityDisplay = this.hass.entities[entityConfig.entity];
     // Lets _renderAllGraphs resolve THIS row's config even when the same entity
     // appears in several rows (reference identity, so duplicates resolve too).
@@ -831,21 +851,36 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     `;
   }
 
-  private _renderUnavailableEntityRow(entityConfig: EntityConfig): TemplateResult {
+  // The one row the card can still draw when an entity cannot be resolved. It
+  // keeps the `unavailable` look for a missing entity - that is what users
+  // already know - and names the other reasons instead of rendering an empty row.
+  private _renderProblemRow(entityConfig: EntityConfig, reason: EntityProblem): TemplateResult {
     const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
+    const message =
+      reason === 'not_found'
+        ? this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT
+        : localize(this.hass, `component.bge.card.${PROBLEM_MESSAGE_KEYS[reason]}`);
+
     return html`
       <div
         class="entity-row unavailable ${showIcon ? '' : 'no-icon'}"
-        @click=${() => this._openEntityPopup(entityConfig.entity)}
+        @click=${() => entityConfig.entity && this._openEntityPopup(entityConfig.entity)}
       >
         ${showIcon ? html`<ha-icon class="entity-icon" icon=${UNAVAILABLE_ICON}></ha-icon>` : ''}
-        <div class="entity-name">${entityConfig.name || entityConfig.entity}</div>
-        <div
-          class="graph-container"
-          data-entity-id=${entityConfig.entity}
-          data-entity-index=${this._entities.indexOf(entityConfig)}
-        ></div>
-        <div class="entity-value">${this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT}</div>
+        <div class="entity-name">${entityConfig.name || entityConfig.entity || ''}</div>
+        ${
+          // A row with no entity id has nothing to graph, and an empty
+          // `data-entity-id` would send the renderer looking for a config that
+          // does not exist.
+          entityConfig.entity
+            ? html`<div
+                class="graph-container"
+                data-entity-id=${entityConfig.entity}
+                data-entity-index=${this._entities.indexOf(entityConfig)}
+              ></div>`
+            : ''
+        }
+        <div class="entity-value">${message}</div>
       </div>
     `;
   }
