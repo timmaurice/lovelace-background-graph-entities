@@ -11,6 +11,7 @@ window.requestAnimationFrame = vi.fn().mockImplementation((cb) => setTimeout(() 
 window.cancelAnimationFrame = vi.fn().mockImplementation((id) => clearTimeout(id));
 
 import { scaleLinear } from 'd3-scale';
+import { LitElement, TemplateResult, html, render as litRender } from 'lit';
 
 // Define a minimal interface for the ha-switch element
 interface HaSwitch extends HTMLElement {
@@ -2790,6 +2791,96 @@ describe('BackgroundGraphEntities', () => {
       expect(transform?.(NaN)).toBeNaN();
       expect(transform?.(Infinity)).toBe(Infinity);
       expect(warnSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Custom element registration', () => {
+    it('does not register a placeholder ha-switch', () => {
+      // Home Assistant ships ha-switch in a lazily loaded chunk. A placeholder from
+      // this bundle can win the race and make HA's own define() throw, which breaks
+      // every toggle and the settings pages.
+      expect(customElements.get('ha-switch')).toBeUndefined();
+    });
+
+    it('lets Home Assistant define ha-switch after a toggle row has rendered', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      // Precondition, asserted here so this test fails on its own if the bundle ever
+      // registers a placeholder again: the toggle the card just rendered must still be
+      // an un-upgraded element waiting for Home Assistant's lazily loaded chunk.
+      expect(customElements.get('ha-switch')).toBeUndefined();
+
+      const toggle = element.shadowRoot?.querySelector<HaSwitch>('ha-switch');
+      expect(toggle).not.toBeNull();
+      expect(customElements.get(toggle!.localName)).toBeUndefined();
+      // Lit wrote `checked` as a plain own property on the un-upgraded element.
+      expect(Object.prototype.hasOwnProperty.call(toggle!, 'checked')).toBe(true);
+      expect(toggle?.checked).toBe(true);
+
+      // Home Assistant's own ha-switch is a LitElement with a reactive `checked`
+      // property, so the upgrade installs a prototype accessor that would shadow the
+      // own property set above unless ReactiveElement rescues it. Replay that upgrade
+      // against exactly such a class. The tag name is unique to this test so no global
+      // `ha-switch` registration leaks into the rest of the file and the tests stay
+      // order-independent.
+      const probeTag = 'ha-switch-upgrade-probe';
+      expect(customElements.get(probeTag)).toBeUndefined();
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      // Same binding the card uses: a property set before the element is defined.
+      litRender(html`<ha-switch-upgrade-probe .checked=${true}></ha-switch-upgrade-probe>`, container);
+
+      const probe = container.querySelector<HaSwitch>(probeTag);
+      expect(probe).not.toBeNull();
+      expect(Object.prototype.hasOwnProperty.call(probe!, 'checked')).toBe(true);
+
+      class HaSwitchLike extends LitElement {
+        static properties = { checked: { type: Boolean } };
+        checked = false;
+        protected render(): TemplateResult {
+          return html`<slot></slot>`;
+        }
+      }
+      expect(() => customElements.define(probeTag, HaSwitchLike)).not.toThrow();
+
+      // The element is upgraded in place and keeps the property set before the upgrade,
+      // even though the class declares a reactive `checked` that defaults to false.
+      expect(probe).toBeInstanceOf(HaSwitchLike);
+      await (probe as unknown as LitElement).updateComplete;
+      expect(probe?.checked).toBe(true);
+      // Guard against a vacuous pass: a fresh instance of the same class is false, so
+      // `true` above can only come from the property set before the upgrade.
+      expect(document.createElement(probeTag) as HaSwitch).toHaveProperty('checked', false);
+
+      container.remove();
+    });
+
+    it('survives a second load of the bundle without a duplicate define or picker entry', async () => {
+      // A duplicate Lovelace resource entry loads this bundle twice.
+      const entriesBefore = (window.customCards ?? []).filter((card) => card.type === 'background-graph-entities');
+      expect(entriesBefore).toHaveLength(1);
+
+      vi.resetModules();
+      await expect(import('../src/background-graph-entities')).resolves.toBeDefined();
+
+      const entriesAfter = (window.customCards ?? []).filter((card) => card.type === 'background-graph-entities');
+      expect(entriesAfter).toHaveLength(1);
+    });
+
+    it('registers the editor element only once when its module loads again', async () => {
+      await import('../src/editor');
+      expect(customElements.get('background-graph-entities-editor')).toBeDefined();
+
+      vi.resetModules();
+      await expect(import('../src/editor')).resolves.toBeDefined();
     });
   });
 });

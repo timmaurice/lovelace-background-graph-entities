@@ -1,5 +1,5 @@
 import { LitElement, html, css, TemplateResult, unsafeCSS } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import {
   HomeAssistant,
   LovelaceCardEditor,
@@ -35,9 +35,10 @@ interface ColorPicker extends HTMLElement {
   configValue?: keyof EditorInternalConfig;
 }
 
+const EDITOR_ELEMENT_NAME = 'background-graph-entities-editor';
+
 type ThresholdEventTarget = HTMLElement & { value?: string };
 
-@customElement('background-graph-entities-editor')
 export class BackgroundGraphEntitiesEditor extends LitElement implements LovelaceCardEditor {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @state() private _config: EditorInternalConfig = {
@@ -1399,4 +1400,10 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   static styles = css`
     ${unsafeCSS(editorStyles)}
   `;
+}
+
+// A duplicate Lovelace resource entry loads this bundle twice. An unguarded define
+// throws on the second pass and the editor would fail to open, so only register once.
+if (typeof window !== 'undefined' && !customElements.get(EDITOR_ELEMENT_NAME)) {
+  customElements.define(EDITOR_ELEMENT_NAME, BackgroundGraphEntitiesEditor);
 }

@@ -1,5 +1,5 @@
 import { LitElement, TemplateResult, html, css, unsafeCSS } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import {
   HomeAssistant,
   LovelaceCard,
@@ -69,7 +69,6 @@ type LovelaceCardConstructor = {
   getConfigElement(): Promise<LovelaceCardEditor>;
 };
 
-@customElement(ELEMENT_NAME)
 export class BackgroundGraphEntities extends LitElement implements LovelaceCard {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @property({ type: Boolean, reflect: true }) public editMode = false;
@@ -1163,18 +1162,27 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   `;
 }
 
-if (typeof window !== 'undefined' && !customElements.get('ha-switch')) {
-  // Define a placeholder if ha-switch is not available, to prevent rendering errors.
-  // This is a fallback for environments where core components might not be loaded.
-  customElements.define('ha-switch', class extends HTMLElement {});
+// `ha-switch` is never registered here. Home Assistant ships it in a lazily loaded
+// chunk, so a placeholder definition can win the race and make Home Assistant's own
+// `customElements.define('ha-switch', ...)` throw, which breaks every toggle and the
+// settings pages. The element is rendered unconditionally instead: Lit keeps the
+// properties we set on it and applies them once Home Assistant upgrades the element.
+
+// A duplicate Lovelace resource entry loads this bundle twice. An unguarded define
+// throws on the second pass and takes the whole card down, so only register once.
+if (typeof window !== 'undefined' && !customElements.get(ELEMENT_NAME)) {
+  customElements.define(ELEMENT_NAME, BackgroundGraphEntities);
 }
 
 if (typeof window !== 'undefined') {
   window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: ELEMENT_NAME,
-    name: 'Background Graph Entities',
-    description: 'A card to display entities with a background graph.',
-    documentationURL: 'https://github.com/timmaurice/lovelace-background-graph-entities',
-  });
+  // Same reason: a second load must not add a second card-picker entry.
+  if (!window.customCards.some((card) => card.type === ELEMENT_NAME)) {
+    window.customCards.push({
+      type: ELEMENT_NAME,
+      name: 'Background Graph Entities',
+      description: 'A card to display entities with a background graph.',
+      documentationURL: 'https://github.com/timmaurice/lovelace-background-graph-entities',
+    });
+  }
 }
