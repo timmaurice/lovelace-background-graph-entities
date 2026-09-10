@@ -3659,4 +3659,62 @@ describe('BackgroundGraphEntities', () => {
       }
     });
   });
+
+  describe('Localized strings', () => {
+    it('localizes the missing-entities error once hass is available', () => {
+      element.hass = { ...hass, language: 'de' };
+      expect(() => element.setConfig({ type: 'custom:background-graph-entities', entities: [] })).toThrow(
+        'Du musst mindestens eine Entität angeben',
+      );
+    });
+
+    it('keeps the English error when hass is not set yet', () => {
+      expect(() => element.setConfig({ type: 'custom:background-graph-entities', entities: [] })).toThrow(
+        'You need to define at least one entity',
+      );
+    });
+
+    it('translates the duration units, not just the digits', async () => {
+      hass.states['sensor.uptime'] = {
+        entity_id: 'sensor.uptime',
+        state: '75.5',
+        attributes: { friendly_name: 'Uptime', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.uptime'] });
+      element.hass = { ...hass, language: 'de' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('1 Std. 15 Min.');
+    });
+
+    it('translates the toggle aria-label', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: [{ entity: 'switch.test' }] });
+      element.hass = { ...hass, language: 'de' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('ha-switch')?.getAttribute('aria-label')).toBe('switch.test umschalten');
+    });
+
+    it('translates the tile-style toggle aria-label', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: [{ entity: 'switch.test', name: 'Lampe' }],
+      });
+      element.hass = { ...hass, language: 'fr' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.icon-container')?.getAttribute('aria-label')).toBe('Basculer Lampe');
+    });
+  });
 });

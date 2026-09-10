@@ -1037,6 +1037,9 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
   protected render(): TemplateResult {
     if (!this.hass || !this._config) {
+      // Unreachable with `hass` set: `_config` is initialised above, so this only
+      // renders before Home Assistant hands the editor its `hass` - which is
+      // exactly when `localize` has no language to resolve against.
       return html`<div>Waiting for config…</div>`;
     }
 

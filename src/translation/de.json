@@ -96,6 +96,11 @@
     "no_entity": "Keine Entität konfiguriert",
     "not_found": "Entität nicht gefunden",
     "wrong_domain": "Nicht unterstützter Entitätstyp",
-    "not_numeric": "Kein numerischer Verlauf"
+    "not_numeric": "Kein numerischer Verlauf",
+    "unavailable": "Nicht verfügbar",
+    "unknown": "Unbekannt",
+    "no_entities_defined": "Du musst mindestens eine Entität angeben",
+    "toggle_entity": "{name} umschalten",
+    "duration_hours_minutes": "{hours} Std. {minutes} Min."
   }
 }

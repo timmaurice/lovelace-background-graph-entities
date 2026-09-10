@@ -356,4 +356,19 @@ describe('BackgroundGraphEntitiesEditor', () => {
       expect(lastConfig().graph_min).toBe(-20);
     });
   });
+
+  describe('Placeholder while the editor waits for hass', () => {
+    it('is the only render that has no hass to localize against', async () => {
+      const bare = document.createElement('background-graph-entities-editor') as EditorType;
+      document.body.appendChild(bare);
+      await bare.updateComplete;
+      expect(bare.shadowRoot?.textContent).toContain('Waiting for config');
+      bare.remove();
+
+      // With hass set the placeholder is gone: `_config` is initialised at
+      // declaration, so the branch only fires before hass arrives.
+      await editor.updateComplete;
+      expect(editor.shadowRoot?.textContent).not.toContain('Waiting for config');
+    });
+  });
 });

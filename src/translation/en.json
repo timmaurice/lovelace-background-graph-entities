@@ -96,6 +96,11 @@
     "no_entity": "No entity configured",
     "not_found": "Entity not found",
     "wrong_domain": "Unsupported entity type",
-    "not_numeric": "No numeric history"
+    "not_numeric": "No numeric history",
+    "unavailable": "Unavailable",
+    "unknown": "Unknown",
+    "no_entities_defined": "You need to define at least one entity",
+    "toggle_entity": "Toggle {name}",
+    "duration_hours_minutes": "{hours}h {minutes}min"
   }
 }

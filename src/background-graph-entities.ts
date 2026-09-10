@@ -46,8 +46,10 @@ const GRAPH_DOT_RADIUS = 2;
 const ELEMENT_NAME = 'background-graph-entities';
 const EDITOR_ELEMENT_NAME = `${ELEMENT_NAME}-editor`;
 const UNAVAILABLE_ICON = 'mdi:alert-circle-outline';
-const UNAVAILABLE_TEXT = 'Unavailable';
-const UNKNOWN_TEXT = 'Unknown';
+// Only reached when `hass.localize` has no answer, so they still go through
+// the card's own translations rather than staying English.
+const UNAVAILABLE_KEY = 'component.bge.card.unavailable';
+const UNKNOWN_KEY = 'component.bge.card.unknown';
 // Upper bound for an inferred fraction-digit count handed to Intl.NumberFormat.
 const MAX_FRACTION_DIGITS = 20;
 
@@ -123,7 +125,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
   public setConfig(config: BackgroundGraphEntitiesConfig): void {
     if (!config || !config.entities || !Array.isArray(config.entities) || config.entities.length === 0) {
-      throw new Error('You need to define at least one entity');
+      // setConfig can run before `hass` is set, and `localize` needs it.
+      throw new Error(
+        this.hass
+          ? localize(this.hass, 'component.bge.card.no_entities_defined')
+          : 'You need to define at least one entity',
+      );
     }
 
     this._config = config;
@@ -638,8 +645,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   // HA reports these two states for every domain. They are words, not measurements, so
   // they must never be run through number formatting or get a unit appended ("unknown °C").
   private _localizeSpecialState(state: string): string | undefined {
-    if (state === 'unavailable') return this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
-    if (state === 'unknown') return this.hass.localize('state.default.unknown') || UNKNOWN_TEXT;
+    if (state === 'unavailable')
+      return this.hass.localize('state.default.unavailable') || localize(this.hass, UNAVAILABLE_KEY);
+    if (state === 'unknown') return this.hass.localize('state.default.unknown') || localize(this.hass, UNKNOWN_KEY);
     return undefined;
   }
 
@@ -664,7 +672,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     let value: string;
     if (!stateObj) {
-      value = this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
+      value = this.hass.localize('state.default.unavailable') || localize(this.hass, UNAVAILABLE_KEY);
     } else {
       const specialState = this._localizeSpecialState(stateObj.state);
       if (specialState) {
@@ -747,6 +755,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // keyboard too. Keys that reach a nested control (the icon toggle, the
     // switch) are left alone - those bring their own handlers.
     const rowLabel = entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity;
+    const toggleLabel = localize(this.hass, 'component.bge.card.toggle_entity', {
+      name: entityConfig.name || entityConfig.entity,
+    });
     const handleRowKeydown = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
       if (e.target !== e.currentTarget) return;
@@ -794,7 +805,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (effectiveNum >= S_IN_MIN) {
         const hours = Math.floor(effectiveNum / S_IN_MIN);
         const minutes = Math.floor(effectiveNum % S_IN_MIN);
-        displayValue = `${formatNumber(hours, this.hass.locale)}h ${formatNumber(minutes, this.hass.locale)}min`;
+        displayValue = localize(this.hass, 'component.bge.card.duration_hours_minutes', {
+          hours: formatNumber(hours, this.hass.locale),
+          minutes: formatNumber(minutes, this.hass.locale),
+        });
       } else {
         displayValue = `${formatNumber(Math.floor(effectiveNum), this.hass.locale)} ${unit}`;
       }
@@ -842,7 +856,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
                   <div
                     class="icon-container ${isBooleanState ? (isActive ? 'active' : 'inactive') : ''}"
                     role=${isToggleable ? 'button' : 'img'}
-                    aria-label=${isToggleable ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
+                    aria-label=${isToggleable ? toggleLabel : ''}
                     aria-pressed=${isToggleable ? isActive : 'false'}
                     tabindex=${isToggleable ? '0' : '-1'}
                     @click=${(e: Event) => {
@@ -929,7 +943,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             ? html`
                 <div class="entity-value entity-with-toggle">
                   <ha-switch
-                    aria-label=${`Toggle ${entityConfig.name || entityConfig.entity}`}
+                    aria-label=${toggleLabel}
                     .checked=${stateObj.state === 'on'}
                     @click=${(e: Event) => {
                       e.stopPropagation();
@@ -967,7 +981,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
     const message =
       reason === 'not_found'
-        ? this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT
+        ? this.hass.localize('state.default.unavailable') || localize(this.hass, UNAVAILABLE_KEY)
         : localize(this.hass, `component.bge.card.${PROBLEM_MESSAGE_KEYS[reason]}`);
 
     return html`
