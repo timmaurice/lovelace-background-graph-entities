@@ -426,6 +426,52 @@ describe('BackgroundGraphEntities', () => {
       expect(historyCalls()[0][0].entity_ids).toEqual(['sensor.test']);
     });
 
+    it('should not refetch when an unrelated option changes', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, title: '' });
+      await element.updateComplete;
+      await element.updateComplete;
+      expect(historyCalls()).toHaveLength(1);
+
+      // Ten keystrokes in the editor's title field are ten setConfig calls.
+      for (const title of 'Livingroom'.split('')) {
+        element.setConfig({ ...config, title });
+        await element.updateComplete;
+      }
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(1);
+    });
+
+    it('should refetch when the history window changes', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+      await element.updateComplete;
+      expect(historyCalls()).toHaveLength(1);
+
+      element.setConfig({ ...config, hours_to_show: 48 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(2);
+    });
+
+    it('should refetch when the entities change', async () => {
+      hass.states['sensor.extra'] = { entity_id: 'sensor.extra', state: '1', attributes: {} };
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+      await element.updateComplete;
+      expect(historyCalls()).toHaveLength(1);
+
+      element.setConfig({ ...config, entities: ['sensor.test', 'sensor.extra'] });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(2);
+    });
+
     it('should still keep per-entity history apart in one response', async () => {
       hass.states['sensor.second'] = { entity_id: 'sensor.second', state: '7', attributes: {} };
       (hass.callWS as Mock).mockResolvedValue({

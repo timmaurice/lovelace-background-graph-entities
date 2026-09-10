@@ -86,6 +86,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   @state() private _entities: EntityConfig[] = [];
   @state() private _history: HistoryMap = new Map();
   private _historyFetched = false;
+  // The history-relevant slice of the config, so an unrelated edit does not
+  // throw away data that is still correct.
+  private _historySignature?: string;
   private _timerId?: number;
   // Compiled value_transform functions, memoized per entity+expression so config
   // rebuilds (e.g. editor edits) neither recompile nor re-warn. `null` caches a
@@ -105,9 +108,21 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       typeof entityConf === 'string' ? { entity: entityConf } : entityConf,
     );
 
-    // When config changes, we need to refetch history.
-    this._historyFetched = false;
-    this._history = new Map();
+    // Only refetch when the config actually changes what the recorder would be
+    // asked for. Typing in the visual editor calls setConfig on every keystroke,
+    // and unconditional invalidation turned ten characters in the title field
+    // into ten full history reloads.
+    const signature = JSON.stringify([
+      this._entities.map((entityConf) => entityConf.graph_entity || entityConf.entity),
+      config.hours_to_show ?? null,
+      config.points_per_hour ?? null,
+      config.show_gaps === true,
+    ]);
+    if (signature !== this._historySignature) {
+      this._historySignature = signature;
+      this._historyFetched = false;
+      this._history = new Map();
+    }
     this._setupUpdateInterval();
   }
 
