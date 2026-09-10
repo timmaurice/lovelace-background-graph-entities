@@ -211,11 +211,28 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return document.createElement(EDITOR_ELEMENT_NAME) as LovelaceCardEditor;
   }
 
-  public static getStubConfig(): Record<string, unknown> {
-    return {
-      entities: [{ entity: 'sun.sun' }],
-      hours_to_show: DEFAULT_HOURS_TO_SHOW,
-    };
+  /**
+   * The config the card picker previews with.
+   *
+   * It used to hard-code `sun.sun`, whose state is a word and whose history is
+   * therefore ungraphable - the preview showed a row and no graph at all. A
+   * numeric sensor is picked instead, from the ids Home Assistant offers and
+   * otherwise from the whole state machine. `hours_to_show` is gone: it only
+   * repeated the default, and a stub should carry nothing a user did not choose.
+   */
+  public static getStubConfig(hass?: HomeAssistant, entities?: string[]): Record<string, unknown> {
+    // `hass` is genuinely absent on some picker paths, so nothing here may
+    // dereference it without a guard.
+    const candidates = entities?.length ? entities : Object.keys(hass?.states ?? {});
+    const graphable = (id: string, domains?: string[]): boolean =>
+      resolveEntity(hass, id, { domains, numeric: true }).ok;
+
+    const pick =
+      candidates.find((id) => graphable(id, ['sensor'])) ?? candidates.find((id) => graphable(id)) ?? candidates[0];
+
+    // An empty id renders the card's own "no entity configured" row, which is a
+    // better preview than a throw from setConfig.
+    return { entities: [{ entity: pick ?? '' }] };
   }
 
   protected updated(changedProperties: Map<string | number | symbol, unknown>): void {

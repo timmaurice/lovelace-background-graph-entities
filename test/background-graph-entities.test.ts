@@ -2937,6 +2937,56 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('getStubConfig', () => {
+    type Stub = { entities: { entity: string }[] };
+    const stub = (h?: HomeAssistant, ids?: string[]): Stub =>
+      (BackgroundGraphEntities as unknown as { getStubConfig(h?: HomeAssistant, ids?: string[]): Stub }).getStubConfig(
+        h,
+        ids,
+      );
+
+    beforeEach(() => {
+      hass.states['sun.sun'] = { entity_id: 'sun.sun', state: 'above_horizon', attributes: {} };
+    });
+
+    it('should not pick an entity whose state is a word', () => {
+      // sun.sun was hard-coded, and it has no numeric history, so the picker
+      // preview showed a row and no graph at all.
+      const picked = stub(hass, ['sun.sun', 'sensor.test']).entities[0].entity;
+      expect(picked).toBe('sensor.test');
+    });
+
+    it('should prefer a sensor over another numeric domain', () => {
+      hass.states['input_number.x'] = { entity_id: 'input_number.x', state: '5', attributes: {} };
+      expect(stub(hass, ['input_number.x', 'sensor.test']).entities[0].entity).toBe('sensor.test');
+    });
+
+    it('should fall back to any numeric entity when no sensor is offered', () => {
+      hass.states['input_number.x'] = { entity_id: 'input_number.x', state: '5', attributes: {} };
+      expect(stub(hass, ['sun.sun', 'input_number.x']).entities[0].entity).toBe('input_number.x');
+    });
+
+    it('should search the whole state machine when no ids are offered', () => {
+      expect(stub(hass).entities[0].entity).toBe('sensor.test');
+    });
+
+    it('should not throw before hass is set', () => {
+      expect(() => stub()).not.toThrow();
+      expect(stub().entities[0].entity).toBe('');
+    });
+
+    it('should return nothing but the entities the user did not choose', () => {
+      // hours_to_show only ever repeated the default.
+      expect(Object.keys(stub(hass, ['sensor.test']))).toEqual(['entities']);
+    });
+
+    it('should produce a config the card accepts', () => {
+      expect(() =>
+        element.setConfig({ type: 'custom:background-graph-entities', ...stub(hass, ['sensor.test']) }),
+      ).not.toThrow();
+    });
+  });
+
   describe('Keyboard access', () => {
     it('should make every row focusable and announce it as a button', async () => {
       hass.states['switch.test'] = {
