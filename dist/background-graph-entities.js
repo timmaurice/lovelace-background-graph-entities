@@ -62,9 +62,7 @@ const ce={attribute:!0,type:String,converter:b,reflect:!1,hasChanged:x},ue=(e=ce
                 `:""}
           <div class="entity-info">
             <div class="entity-name">
-              <span class="name-text"
-                >${e.name||n.attributes.friendly_name||e.entity}</span
-              >
+              <span class="name-text" title=${y}>${y}</span>
             </div>
             <div class="entity-value">
               <span class="primary-value">${a}</span>
@@ -92,9 +90,7 @@ const ce={attribute:!0,type:String,converter:b,reflect:!1,hasChanged:x},ue=(e=ce
                   style=${v}
                 ></ha-state-icon>`:""}
         <div class="entity-name">
-          <span class="name-text"
-            >${e.name||n.attributes.friendly_name||e.entity}</span
-          >
+          <span class="name-text" title=${y}>${y}</span>
           ${h&&!c&&_?j`<span class="secondary-value-inline">${_}</span>`:""}
           ${h&&!c&&m?j`<span class="extra-value-inline">${m}</span>`:""}
         </div>
@@ -129,7 +125,9 @@ const ce={attribute:!0,type:String,converter:b,reflect:!1,hasChanged:x},ue=(e=ce
       >
         ${n?j`<ha-icon class="entity-icon" icon=${"mdi:alert-circle-outline"}></ha-icon>`:""}
         <div class="entity-name">
-          <span class="name-text">${e.name||e.entity||""}</span>
+          <span class="name-text" title=${e.name||e.entity||""}
+            >${e.name||e.entity||""}</span
+          >
         </div>
         ${e.entity?j`<div
                 class="graph-container"

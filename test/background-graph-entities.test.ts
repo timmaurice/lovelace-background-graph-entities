@@ -3717,4 +3717,50 @@ describe('BackgroundGraphEntities', () => {
       expect(element.shadowRoot?.querySelector('.icon-container')?.getAttribute('aria-label')).toBe('Basculer Lampe');
     });
   });
+
+  describe('Truncated entity names', () => {
+    const longName = 'A very long entity name that the card truncates with an ellipsis';
+
+    it('exposes the full name as a title on a normal row', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test', name: longName }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe(longName);
+    });
+
+    it('exposes the full name as a title on a tile-style row', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: [{ entity: 'sensor.test', name: longName }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe(longName);
+    });
+
+    it('falls back to the friendly name for the title', async () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe('Test Sensor');
+    });
+
+    it('exposes the name as a title on a problem row too', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.missing', name: longName }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe(longName);
+    });
+  });
 });
