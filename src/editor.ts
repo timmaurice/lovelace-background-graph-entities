@@ -226,7 +226,12 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         value = target.value === '' ? undefined : Number(target.value);
       }
 
-      if (value === undefined || (typeof value === 'number' && isNaN(value))) {
+      // An empty field means "unset", not `''`. Writing the empty string back
+      // saved a key the user never chose - and for the theme-dependent default
+      // line colour, prefilling the field baked `black`/`white` into the config
+      // the first time the field was touched, after which the card stopped
+      // following the theme.
+      if (value === undefined || value === '' || (typeof value === 'number' && isNaN(value))) {
         delete newConfig[configValue];
       } else {
         newConfig[configValue] = value;
@@ -1084,7 +1089,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.hours_to_show')}
             type="number"
-            .value=${String(this._config.hours_to_show ?? 24)}
+            .value=${this._config.hours_to_show ?? ''}
+            .placeholder=${'24'}
             .configValue=${'hours_to_show'}
             @change=${this._valueChanged}
           ></ha-input>
@@ -1092,7 +1098,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.line_width')}
             type="number"
-            .value=${String(this._config.line_width ?? 3)}
+            .value=${this._config.line_width ?? ''}
+            .placeholder=${'3'}
             .configValue=${'line_width'}
             @change=${this._valueChanged}
           ></ha-input>
@@ -1192,7 +1199,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                 >
                   <ha-input
                     .label=${localize(this.hass, 'component.bge.editor.line_color')}
-                    .value=${this._config.line_color || defaultLineColor}
+                    .value=${this._config.line_color ?? ''}
+                    .placeholder=${defaultLineColor}
                     .configValue=${'line_color'}
                     @change=${this._valueChanged}
                   ></ha-input>
@@ -1327,14 +1335,16 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.points_per_hour')}
             type="number"
-            .value=${String(this._config.points_per_hour ?? 1)}
+            .value=${this._config.points_per_hour ?? ''}
+            .placeholder=${'1'}
             .configValue=${'points_per_hour'}
             @change=${this._valueChanged}
           ></ha-input>
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.update_interval')}
             type="number"
-            .value=${String(this._config.update_interval ?? 600)}
+            .value=${this._config.update_interval ?? ''}
+            .placeholder=${'600'}
             .configValue=${'update_interval'}
             @change=${this._valueChanged}
           ></ha-input>
