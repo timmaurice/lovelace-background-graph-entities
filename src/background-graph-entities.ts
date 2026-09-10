@@ -617,11 +617,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             : 0;
           precision = Math.max(rawDecimals, this._transformPrecisionFloor(num));
         }
-        const formattedValue =
-          !isNaN(num) && typeof precision === 'number'
-            ? formatNumber(num, this.hass.locale, precision)
-            : stateObj.state;
-        value = [formattedValue, unit].filter(Boolean).join(' ');
+        if (!Number.isFinite(num)) {
+          // Same rule as the main value: a text state gets no unit.
+          value = stateObj.state;
+        } else {
+          const formattedValue =
+            typeof precision === 'number' ? formatNumber(num, this.hass.locale, precision) : stateObj.state;
+          value = [formattedValue, unit].filter(Boolean).join(' ');
+        }
       }
     }
 
@@ -695,6 +698,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     if (specialState) {
       displayValue = specialState;
+    } else if (!Number.isFinite(effectiveNum)) {
+      // A text state ("above_horizon", "heating", "on") is a word, not a
+      // measurement. Running it through the numeric paths produced
+      // "above_horizon °C" and, for a minutes unit, "NaN min".
+      displayValue = effectiveStateString;
     } else if (unit.toLowerCase() === 'min') {
       // Special formatting for time in minutes
       if (effectiveNum >= S_IN_MIN) {

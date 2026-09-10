@@ -2937,6 +2937,68 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Text states', () => {
+    it('should not append a unit to a text state', async () => {
+      hass.states['sun.sun'] = {
+        entity_id: 'sun.sun',
+        state: 'above_horizon',
+        attributes: { friendly_name: 'Sun', unit_of_measurement: '°C' },
+      };
+      hass.states['climate.hall'] = {
+        entity_id: 'climate.hall',
+        state: 'heating',
+        attributes: { friendly_name: 'Hall', unit_of_measurement: '°C' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sun.sun', 'climate.hall'],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const values = element.shadowRoot?.querySelectorAll('.primary-value');
+      expect(values?.[0].textContent?.trim()).toBe('above_horizon');
+      expect(values?.[1].textContent?.trim()).toBe('heating');
+    });
+
+    it('should not turn a text state into "NaN min"', async () => {
+      hass.states['sensor.timer'] = {
+        entity_id: 'sensor.timer',
+        state: 'idle',
+        attributes: { friendly_name: 'Timer', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.timer'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.primary-value')?.textContent?.trim()).toBe('idle');
+    });
+
+    it('should not append a unit to a companion text state', async () => {
+      hass.states['sensor.mode'] = {
+        entity_id: 'sensor.mode',
+        state: 'eco',
+        attributes: { friendly_name: 'Mode', unit_of_measurement: 'kWh' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test', extra_value_entity: 'sensor.mode' }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.extra-value')?.textContent?.trim()).toBe('eco');
+    });
+
+    it('should still format a numeric state with its unit', async () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.primary-value')?.textContent?.trim()).toBe('123 °C');
+    });
+  });
+
   describe('Entity resolution', () => {
     it('names a row that has no entity key at all', () => {
       expect(resolveEntity(hass, undefined)).toEqual({ ok: false, reason: 'not_configured' });
