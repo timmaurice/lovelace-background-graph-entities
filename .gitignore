@@ -16,3 +16,10 @@ dist/background-graph-entities.js.map
 # Home Assistant test environment
 docker-compose.ha.yml
 ha-config/
+
+# Home Assistant driven Playwright suite
+playwright-report-ha/
+test-results-ha/
+
+# Local machine compose override (corporate CA, local paths)
+docker-compose.override.yml

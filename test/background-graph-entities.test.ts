@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi, Mock, beforeAll } from
 import { HomeAssistant, BackgroundGraphEntitiesConfig } from '../src/types';
 import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../src/background-graph-entities';
 import { compileValueTransform, downsampleHistory, formatNumber } from '../src/utils';
+import { resolveEntity } from '../src/entity';
 
 // Mock console.info before the module is imported to prevent version logging.
 vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -11,6 +12,7 @@ window.requestAnimationFrame = vi.fn().mockImplementation((cb) => setTimeout(() 
 window.cancelAnimationFrame = vi.fn().mockImplementation((id) => clearTimeout(id));
 
 import { scaleLinear } from 'd3-scale';
+import { LitElement, TemplateResult, html, render as litRender } from 'lit';
 
 // Define a minimal interface for the ha-switch element
 interface HaSwitch extends HTMLElement {
@@ -22,6 +24,19 @@ vi.mock('d3-scale', async () => {
   // We spy on scaleLinear to be able to check the domain it was called with.
   return { ...originalModule, scaleLinear: vi.fn(originalModule.scaleLinear) };
 });
+
+/**
+ * Drains the rAF-driven render chain under fake timers.
+ *
+ * Not `runAllTimersAsync`: the card now arms a recurring history refresh, so the
+ * timer queue never empties and that helper aborts as an infinite loop. The
+ * render path only ever hops a handful of animation frames (mocked here as
+ * `setTimeout(cb, 0)`), so a short bounded advance is enough - and it keeps the
+ * refresh interval out of the tests that only care about drawing.
+ */
+async function flushFrames(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(100);
+}
 
 describe('BackgroundGraphEntities', () => {
   let element: BackgroundGraphEntitiesType;
@@ -283,7 +298,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       // Wait for the requestAnimationFrame in `updated()` to fire and render the D3 graph.
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const graphContainer = element.shadowRoot?.querySelector('.graph-container');
       const svg = graphContainer?.querySelector('svg');
@@ -369,6 +384,187 @@ describe('BackgroundGraphEntities', () => {
       expect(values).toHaveLength(2);
       expect(values?.[0].textContent?.trim()).toBe('14 min');
       expect(values?.[1].textContent?.trim()).toBe('1h 15min');
+    });
+  });
+
+  describe('History fetching', () => {
+    const historyCalls = () =>
+      (hass.callWS as Mock).mock.calls.filter(([message]) => message?.type === 'history/history_during_period') as [
+        { entity_ids: string[] },
+      ][];
+
+    it('should fetch every row in a single websocket call', async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 12; i++) {
+        const id = `sensor.row_${i}`;
+        ids.push(id);
+        hass.states[id] = { entity_id: id, state: String(i), attributes: {} };
+      }
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ids });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      // One request per row is what made a 60-row card issue 60 calls.
+      expect(historyCalls()).toHaveLength(1);
+      expect(historyCalls()[0][0].entity_ids).toEqual(ids);
+    });
+
+    it('should ask for a shared series only once', async () => {
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          { entity: 'sensor.test' },
+          { entity: 'sensor.test', name: 'Same entity, second row' },
+          { entity: 'sensor.other', graph_entity: 'sensor.test' },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(1);
+      expect(historyCalls()[0][0].entity_ids).toEqual(['sensor.test']);
+    });
+
+    it('should not refetch when an unrelated option changes', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, title: '' });
+      await element.updateComplete;
+      await element.updateComplete;
+      expect(historyCalls()).toHaveLength(1);
+
+      // Ten keystrokes in the editor's title field are ten setConfig calls.
+      for (const title of 'Livingroom'.split('')) {
+        element.setConfig({ ...config, title });
+        await element.updateComplete;
+      }
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(1);
+    });
+
+    it('should refetch when the history window changes', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+      await element.updateComplete;
+      expect(historyCalls()).toHaveLength(1);
+
+      element.setConfig({ ...config, hours_to_show: 48 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(2);
+    });
+
+    it('should refetch when the entities change', async () => {
+      hass.states['sensor.extra'] = { entity_id: 'sensor.extra', state: '1', attributes: {} };
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+      await element.updateComplete;
+      expect(historyCalls()).toHaveLength(1);
+
+      element.setConfig({ ...config, entities: ['sensor.test', 'sensor.extra'] });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(2);
+    });
+
+    it('should still keep per-entity history apart in one response', async () => {
+      hass.states['sensor.second'] = { entity_id: 'sensor.second', state: '7', attributes: {} };
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [{ lu: 1_700_000_000, s: '1' }],
+        'sensor.second': [{ lu: 1_700_000_000, s: '2' }],
+      });
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test', 'sensor.second'] });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const history = (element as unknown as { _history: Map<string, { raw: { value: number }[] }> })._history;
+      expect(history.get('sensor.test')?.raw[0].value).toBe(1);
+      expect(history.get('sensor.second')?.raw[0].value).toBe(2);
+    });
+  });
+
+  describe('History refresh interval', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should refresh history on the documented default interval', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+      await element.updateComplete;
+      const callsAfterFirstFetch = (hass.callWS as Mock).mock.calls.length;
+      expect(callsAfterFirstFetch).toBeGreaterThan(0);
+
+      // README documents `update_interval: 600`; without a default the card
+      // fetched once and then froze forever.
+      await vi.advanceTimersByTimeAsync(600 * 1000 + 10);
+      expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(callsAfterFirstFetch);
+    });
+
+    it('should honor an explicit update_interval', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, update_interval: 5 });
+      await element.updateComplete;
+      await element.updateComplete;
+      const before = (hass.callWS as Mock).mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(5 * 1000 + 10);
+      expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(before);
+    });
+
+    it('should never refresh when update_interval is 0', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, update_interval: 0 });
+      await element.updateComplete;
+      await element.updateComplete;
+      const before = (hass.callWS as Mock).mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+      expect((hass.callWS as Mock).mock.calls.length).toBe(before);
+    });
+  });
+
+  describe('Locale-aware durations', () => {
+    it('should group the hour count the way the locale does', async () => {
+      hass.locale = { language: 'de', number_format: 'decimal_comma' };
+      hass.states['sensor.uptime'] = {
+        entity_id: 'sensor.uptime',
+        state: '75000',
+        attributes: { friendly_name: 'Uptime', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.uptime'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      // 75000 minutes = 1250h 0min; every other value on the card would render
+      // that as 1.250 in this locale.
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('1.250h 0min');
+    });
+
+    it('should group a sub-hour value the same way', async () => {
+      hass.locale = { language: 'en', number_format: 'comma_decimal' };
+      hass.states['sensor.short'] = {
+        entity_id: 'sensor.short',
+        state: '45',
+        attributes: { friendly_name: 'Short', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.short'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('45 min');
     });
   });
 
@@ -555,7 +751,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, line_glow: true, hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const svg = element.shadowRoot?.querySelector('svg');
       expect(svg, 'SVG element should exist').not.toBeNull();
@@ -573,7 +769,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const svg = element.shadowRoot?.querySelector('svg');
       expect(svg, 'SVG element should exist').not.toBeNull();
@@ -589,7 +785,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const path = element.shadowRoot?.querySelector('path');
       expect(path, 'Path element should exist').not.toBeNull();
@@ -604,7 +800,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, curve: 'linear', hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const path = element.shadowRoot?.querySelector('path');
       expect(path, 'Path element should exist').not.toBeNull();
@@ -620,7 +816,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, curve: 'step', hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const path = element.shadowRoot?.querySelector('path');
       expect(path, 'Path element should exist').not.toBeNull();
@@ -1080,7 +1276,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig(config);
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const yDomain = [10, 20];
       const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR;
@@ -1095,7 +1291,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, graph_min: 0, graph_max: 50 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       expect(scaleLinear).toHaveBeenCalled();
       const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
@@ -1106,7 +1302,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, graph_min: 0 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const yDomain = [0, 20]; // min is overridden
       const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR;
@@ -1115,6 +1311,43 @@ describe('BackgroundGraphEntities', () => {
       expect(scaleLinear).toHaveBeenCalled();
       const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
       expect(lastCall.domain()).toEqual(expectedDomain);
+    });
+
+    it('honours bounds that YAML quoted into strings', async () => {
+      // `graph_min: "0"` is legal YAML, and a bare `typeof === 'number'` gate
+      // dropped it silently - the graph just kept its automatic bounds.
+      element.setConfig({
+        ...config,
+        graph_min: '0' as unknown as number,
+        graph_max: '50' as unknown as number,
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([0, 50]);
+    });
+
+    it('honours a per-entity bound the visual editor stored as a string', async () => {
+      // What the per-entity handler wrote before it read the `type` attribute.
+      element.setConfig({
+        ...config,
+        entities: [
+          {
+            entity: 'sensor.test',
+            overwrite_graph_appearance: true,
+            graph_min: '5' as unknown as number,
+            graph_max: '25' as unknown as number,
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([5, 25]);
     });
 
     it('should use per-entity bounds which override global bounds', async () => {
@@ -1133,7 +1366,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       expect(scaleLinear).toHaveBeenCalled();
       const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
@@ -1148,7 +1381,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       // The domain should be exactly [0, 50], not [0 - padding, 50 + padding]
       const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
@@ -1331,6 +1564,29 @@ describe('BackgroundGraphEntities', () => {
       expect(result[3].value).toBe(30);
       expect(result[4].value).toBe(30);
     });
+
+    it('should downsample a week of dense data in one pass', () => {
+      // A sample every 10s for a week - 60k states over 2016 buckets. The old
+      // implementation walked every state for every bucket and needed roughly a
+      // second per entity for exactly this shape of data; the budget here is
+      // deliberately far above the one-pass cost and far below the quadratic one.
+      vi.useRealTimers();
+      const hours = 168;
+      const perHour = 12;
+      const now = Date.now();
+      const dense: { timestamp: Date; value: number }[] = [];
+      for (let t = now - hours * 3600 * 1000; t <= now; t += 10_000) {
+        dense.push({ timestamp: new Date(t), value: 20 + Math.sin(t / 1e6) * 5 });
+      }
+
+      const started = performance.now();
+      const result = downsampleHistory(dense, hours, perHour);
+      const elapsed = performance.now() - started;
+
+      expect(result).toHaveLength(hours * perHour + 1);
+      expect(result.every((point) => Number.isFinite(point.value))).toBe(true);
+      expect(elapsed).toBeLessThan(250);
+    });
   });
 
   describe('Gaps for unavailable states (show_gaps)', () => {
@@ -1359,7 +1615,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, ...gapConfig, ...extraConfig });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
       return element.shadowRoot?.querySelector('.graph-path') ?? null;
     };
@@ -1427,7 +1683,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Max of the finite raw samples (10, 12, 20, 22) — the gap markers are ignored.
@@ -1485,7 +1741,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1508,7 +1764,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1543,7 +1799,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1577,7 +1833,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1610,7 +1866,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1655,7 +1911,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1674,7 +1930,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1693,7 +1949,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Downsampled history [30, 65, 55] → mean = 50.
@@ -1713,7 +1969,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Downsampled history [30, 65, 55] → sorted [30, 55, 65] → median = 55.
@@ -1733,7 +1989,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const label = element.shadowRoot?.querySelector('.value-label');
@@ -1764,7 +2020,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1782,7 +2038,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1830,7 +2086,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1874,7 +2130,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1894,7 +2150,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Precision comes from the raw state "12.5" (1 decimal), not the transformed number.
@@ -1914,7 +2170,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Raw history [30, 100, 10] × 2 → max 200.
@@ -1934,7 +2190,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Raw [30, 100, 10] → [-30, -100, -10]: the max is -10, not the
@@ -1955,7 +2211,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       // Downsampled [30, 65, 55] × 8 → extent [240, 520], 10% padding → [212, 548].
       expect(scaleLinear).toHaveBeenCalled();
@@ -1984,7 +2240,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Latest downsampled value 60 × 2 = 120 ≥ threshold 100 → pure red.
@@ -2206,6 +2462,57 @@ describe('BackgroundGraphEntities', () => {
       warnSpy.mockRestore();
     });
 
+    it('should give duplicate rows their own gradient', async () => {
+      // Ids are document-wide, so a shared id makes the second row paint itself
+      // with the first row's thresholds.
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#ff0000' },
+              { value: 100, color: '#00ff00' },
+            ],
+          },
+          {
+            entity: 'sensor.test',
+            name: 'Same entity again',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#0000ff' },
+              { value: 100, color: '#ffff00' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const gradients = element.shadowRoot?.querySelectorAll('defs > *') as unknown as SVGGradientElement[];
+      expect(gradients).toHaveLength(2);
+      const ids = [...gradients].map((gradient) => gradient.getAttribute('id')!);
+      expect(new Set(ids).size).toBe(2);
+
+      const paths = element.shadowRoot?.querySelectorAll('path.graph-path');
+      expect(paths).toHaveLength(2);
+      expect(paths?.[0].getAttribute('stroke')).toBe(`url(#${ids[0]})`);
+      expect(paths?.[1].getAttribute('stroke')).toBe(`url(#${ids[1]})`);
+
+      const stopColors = (gradient: Element): (string | null)[] =>
+        [...gradient.children].map((stop) => stop.getAttribute('stop-color'));
+      const firstStops = stopColors(gradients[0]);
+      const secondStops = stopColors(gradients[1]);
+      expect(firstStops).toEqual(['#ff0000', '#00ff00']);
+      expect(secondStops).toEqual(['#0000ff', '#ffff00']);
+    });
+
     it('should apply each duplicate row its own transform to the graph', async () => {
       (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
 
@@ -2218,7 +2525,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       // The last-rendered graph belongs to the second row; with find-by-id it
       // would wrongly use the first (untransformed) config → domain [9.5, 68.5].
@@ -2410,7 +2717,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2440,7 +2747,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2470,7 +2777,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2500,7 +2807,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2688,7 +2995,7 @@ describe('BackgroundGraphEntities', () => {
 
       await element.updateComplete;
       await element.updateComplete; // wait for history fetch
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
@@ -2696,6 +3003,435 @@ describe('BackgroundGraphEntities', () => {
       );
       // temp_a has max=50, temp_b has max=30. In reverse numeric sort: temp_a (Z Temperature) is first
       expect(names).toEqual(['Z Temperature', 'A Temperature']);
+    });
+  });
+
+  describe('getStubConfig', () => {
+    type Stub = { entities: { entity: string }[] };
+    const stub = (h?: HomeAssistant, ids?: string[]): Stub =>
+      (BackgroundGraphEntities as unknown as { getStubConfig(h?: HomeAssistant, ids?: string[]): Stub }).getStubConfig(
+        h,
+        ids,
+      );
+
+    beforeEach(() => {
+      hass.states['sun.sun'] = { entity_id: 'sun.sun', state: 'above_horizon', attributes: {} };
+    });
+
+    it('should not pick an entity whose state is a word', () => {
+      // sun.sun was hard-coded, and it has no numeric history, so the picker
+      // preview showed a row and no graph at all.
+      const picked = stub(hass, ['sun.sun', 'sensor.test']).entities[0].entity;
+      expect(picked).toBe('sensor.test');
+    });
+
+    it('should prefer a sensor over another numeric domain', () => {
+      hass.states['input_number.x'] = { entity_id: 'input_number.x', state: '5', attributes: {} };
+      expect(stub(hass, ['input_number.x', 'sensor.test']).entities[0].entity).toBe('sensor.test');
+    });
+
+    it('should fall back to any numeric entity when no sensor is offered', () => {
+      hass.states['input_number.x'] = { entity_id: 'input_number.x', state: '5', attributes: {} };
+      expect(stub(hass, ['sun.sun', 'input_number.x']).entities[0].entity).toBe('input_number.x');
+    });
+
+    it('should search the whole state machine when no ids are offered', () => {
+      expect(stub(hass).entities[0].entity).toBe('sensor.test');
+    });
+
+    it('should not throw before hass is set', () => {
+      expect(() => stub()).not.toThrow();
+      expect(stub().entities[0].entity).toBe('');
+    });
+
+    it('should return nothing but the entities the user did not choose', () => {
+      // hours_to_show only ever repeated the default.
+      expect(Object.keys(stub(hass, ['sensor.test']))).toEqual(['entities']);
+    });
+
+    it('should produce a config the card accepts', () => {
+      expect(() =>
+        element.setConfig({ type: 'custom:background-graph-entities', ...stub(hass, ['sensor.test']) }),
+      ).not.toThrow();
+    });
+  });
+
+  describe('getGridOptions', () => {
+    const grid = (): Record<string, number> =>
+      (element as unknown as { getGridOptions(): Record<string, number> }).getGridOptions();
+
+    it('should describe a full-width card that may shrink to half', () => {
+      element.setConfig(config);
+      expect(grid().columns).toBe(12);
+      expect(grid().min_columns).toBe(6);
+      expect(grid().min_rows).toBe(1);
+    });
+
+    it('should grow with the number of rows', () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      const one = grid().rows;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.test', 'sensor.test', 'sensor.test', 'sensor.test', 'sensor.test', 'sensor.test'],
+      });
+      expect(grid().rows).toBeGreaterThan(one);
+    });
+
+    it('should leave room for a title', () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      const untitled = grid().rows;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'], title: 'Room' });
+      expect(grid().rows).toBeGreaterThan(untitled);
+    });
+
+    it('should ask for less height in tile style', () => {
+      const entities = Array.from({ length: 12 }, () => 'sensor.test');
+      element.setConfig({ type: 'custom:background-graph-entities', entities });
+      const standard = grid().rows;
+      element.setConfig({ type: 'custom:background-graph-entities', entities, tile_style: true });
+      expect(grid().rows).toBeLessThan(standard);
+    });
+
+    it('should never ask for less than one row before a config arrives', () => {
+      const fresh = document.createElement('background-graph-entities') as BackgroundGraphEntitiesType;
+      expect(
+        (fresh as unknown as { getGridOptions(): Record<string, number> }).getGridOptions().rows,
+      ).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Keyboard access', () => {
+    it('should make every row focusable and announce it as a button', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test', 'switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const rows = element.shadowRoot?.querySelectorAll('.entity-row');
+      expect(rows).toHaveLength(2);
+      rows?.forEach((row) => {
+        expect(row.getAttribute('tabindex')).toBe('0');
+        expect(row.getAttribute('role')).toBe('button');
+      });
+      expect(rows?.[0].getAttribute('aria-label')).toBe('Test Sensor');
+    });
+
+    it('should open more-info from the keyboard', async () => {
+      element.setConfig(config);
+      element.hass = hass;
+      await element.updateComplete;
+
+      const seen: string[] = [];
+      element.addEventListener('hass-more-info', (ev) => seen.push((ev as CustomEvent).detail.entityId));
+
+      const row = element.shadowRoot?.querySelector('.entity-row') as HTMLElement;
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+
+      expect(seen).toEqual(['sensor.test', 'sensor.test']);
+    });
+
+    it('should leave keys that reached a nested control alone', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: ['switch.test'],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const seen: string[] = [];
+      element.addEventListener('hass-more-info', (ev) => seen.push((ev as CustomEvent).detail.entityId));
+
+      // The icon container is the toggle; Enter there must toggle, not open more-info.
+      const icon = element.shadowRoot?.querySelector('.icon-container') as HTMLElement;
+      icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+      expect(seen).toEqual([]);
+      expect(hass.callService).toHaveBeenCalledWith('homeassistant', 'toggle', { entity_id: 'switch.test' });
+    });
+
+    it('should keep an unresolvable row out of the tab order', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ name: 'Half-filled row' } as unknown as string],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const row = element.shadowRoot?.querySelector('.entity-row.unavailable');
+      expect(row?.getAttribute('tabindex')).toBe('-1');
+    });
+  });
+
+  describe('Redrawing on resize', () => {
+    let observed: Element[];
+    let fireResize: (() => void) | undefined;
+    const mockNow = new Date('2023-01-01T11:30:00Z');
+
+    beforeEach(() => {
+      observed = [];
+      fireResize = undefined;
+      // jsdom has no ResizeObserver; this one just hands the callback back.
+      (window as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+        constructor(callback: () => void) {
+          fireResize = callback;
+        }
+        observe(target: Element) {
+          observed.push(target);
+        }
+        disconnect() {}
+        unobserve() {}
+      };
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [
+          { lu: new Date('2023-01-01T09:30:00Z').getTime() / 1000, s: '5' },
+          { lu: new Date('2023-01-01T10:30:00Z').getTime() / 1000, s: '15' },
+        ],
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      delete (window as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+    });
+
+    it('should observe itself while connected', async () => {
+      // The element in the outer beforeEach was created before the stub existed.
+      document.body.removeChild(element);
+      document.body.appendChild(element);
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
+      await element.updateComplete;
+
+      expect(observed).toContain(element);
+    });
+
+    it('should redraw the graph at the new width', async () => {
+      document.body.removeChild(element);
+      document.body.appendChild(element);
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const svg = element.shadowRoot?.querySelector('svg');
+      expect(svg?.getAttribute('viewBox')).toBe('0 0 100 50');
+
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 250 });
+      fireResize!();
+      await flushFrames();
+
+      // Without a redraw the old viewBox is simply stretched, which is what
+      // distorted the strokes.
+      expect(element.shadowRoot?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 250 50');
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 100 });
+    });
+  });
+
+  describe('History window across a DST switch', () => {
+    const originalTz = process.env.TZ;
+
+    beforeEach(() => {
+      // Europe/Berlin springs forward at 02:00 on 2024-03-31, so the calendar
+      // day the card looks back over is only 23 real hours long.
+      process.env.TZ = 'Europe/Berlin';
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-03-31T03:30:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      process.env.TZ = originalTz;
+    });
+
+    it('should request exactly hours_to_show elapsed hours', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 24 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const [message] = (hass.callWS as Mock).mock.calls.find(([m]) => m?.type === 'history/history_during_period') as [
+        { start_time: string; end_time: string },
+      ];
+      const span = new Date(message.end_time).getTime() - new Date(message.start_time).getTime();
+      expect(span).toBe(24 * 60 * 60 * 1000);
+    });
+
+    it('should line the first bucket up with the start of the requested window', async () => {
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [{ lu: new Date('2024-03-31T02:00:00Z').getTime() / 1000, s: '5' }],
+      });
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 24, points_per_hour: 1 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const [message] = (hass.callWS as Mock).mock.calls.find(([m]) => m?.type === 'history/history_during_period') as [
+        { start_time: string },
+      ];
+      const history = (element as unknown as { _history: Map<string, { downsampled: { timestamp: Date }[] }> })
+        ._history;
+      // The anchor point of the bucket grid has to be the moment the fetch
+      // window opens, or every bucket is shifted by the DST hour.
+      expect(history.get('sensor.test')?.downsampled[0].timestamp.toISOString()).toBe(
+        new Date(message.start_time).toISOString(),
+      );
+    });
+  });
+
+  describe('Text states', () => {
+    it('should not append a unit to a text state', async () => {
+      hass.states['sun.sun'] = {
+        entity_id: 'sun.sun',
+        state: 'above_horizon',
+        attributes: { friendly_name: 'Sun', unit_of_measurement: '°C' },
+      };
+      hass.states['climate.hall'] = {
+        entity_id: 'climate.hall',
+        state: 'heating',
+        attributes: { friendly_name: 'Hall', unit_of_measurement: '°C' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sun.sun', 'climate.hall'],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const values = element.shadowRoot?.querySelectorAll('.primary-value');
+      expect(values?.[0].textContent?.trim()).toBe('above_horizon');
+      expect(values?.[1].textContent?.trim()).toBe('heating');
+    });
+
+    it('should not turn a text state into "NaN min"', async () => {
+      hass.states['sensor.timer'] = {
+        entity_id: 'sensor.timer',
+        state: 'idle',
+        attributes: { friendly_name: 'Timer', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.timer'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.primary-value')?.textContent?.trim()).toBe('idle');
+    });
+
+    it('should not append a unit to a companion text state', async () => {
+      hass.states['sensor.mode'] = {
+        entity_id: 'sensor.mode',
+        state: 'eco',
+        attributes: { friendly_name: 'Mode', unit_of_measurement: 'kWh' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test', extra_value_entity: 'sensor.mode' }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.extra-value')?.textContent?.trim()).toBe('eco');
+    });
+
+    it('should still format a numeric state with its unit', async () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.primary-value')?.textContent?.trim()).toBe('123 °C');
+    });
+  });
+
+  describe('Entity resolution', () => {
+    it('names a row that has no entity key at all', () => {
+      expect(resolveEntity(hass, undefined)).toEqual({ ok: false, reason: 'not_configured' });
+      expect(resolveEntity(hass, '  ')).toEqual({ ok: false, reason: 'not_configured' });
+    });
+
+    it('names an entity that is not in hass', () => {
+      expect(resolveEntity(hass, 'sensor.nope')).toEqual({
+        ok: false,
+        entityId: 'sensor.nope',
+        reason: 'not_found',
+      });
+    });
+
+    it('names an unavailable entity', () => {
+      hass.states['sensor.gone'] = { entity_id: 'sensor.gone', state: 'unavailable', attributes: {} };
+      expect(resolveEntity(hass, 'sensor.gone').ok).toBe(false);
+      expect(resolveEntity(hass, 'sensor.gone')).toMatchObject({ reason: 'unavailable' });
+    });
+
+    it('names an entity from a domain the caller does not accept', () => {
+      hass.states['light.lamp'] = { entity_id: 'light.lamp', state: 'on', attributes: {} };
+      expect(resolveEntity(hass, 'light.lamp', { domains: ['sensor'] })).toMatchObject({ reason: 'wrong_domain' });
+      expect(resolveEntity(hass, 'sensor.test', { domains: ['sensor'] }).ok).toBe(true);
+    });
+
+    it('names a non-numeric entity only when the caller asked for numbers', () => {
+      hass.states['sun.sun'] = { entity_id: 'sun.sun', state: 'above_horizon', attributes: {} };
+      expect(resolveEntity(hass, 'sun.sun').ok).toBe(true);
+      expect(resolveEntity(hass, 'sun.sun', { numeric: true })).toMatchObject({ reason: 'not_numeric' });
+    });
+
+    it('accepts on/off as numeric, because the card graphs it as 1/0', () => {
+      hass.states['switch.ac'] = { entity_id: 'switch.ac', state: 'off', attributes: {} };
+      expect(resolveEntity(hass, 'switch.ac', { numeric: true }).ok).toBe(true);
+    });
+
+    it('resolves a healthy entity to its state object', () => {
+      const resolved = resolveEntity(hass, 'sensor.test');
+      expect(resolved.ok).toBe(true);
+      expect(resolved.ok && resolved.stateObj.state).toBe('123');
+    });
+
+    it('survives a hass that has not arrived yet', () => {
+      expect(resolveEntity(undefined, 'sensor.test')).toMatchObject({ reason: 'not_found' });
+    });
+  });
+
+  describe('Rows the card cannot resolve', () => {
+    it('should render a warning row instead of crashing on a missing entity key', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        // A row without `entity` - hand-written YAML, or a half-filled editor row.
+        entities: [{ name: 'Half-filled row' } as unknown as string, 'sensor.test'],
+        sort: { method: 'name' },
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const rows = element.shadowRoot?.querySelectorAll('.entity-row');
+      expect(rows).toHaveLength(2);
+      const warning = element.shadowRoot?.querySelector('.entity-row.unavailable');
+      expect(warning?.querySelector('.entity-value')?.textContent?.trim()).toBe('No entity configured');
+      // Nothing to graph, so no container that the graph renderer could trip over.
+      expect(warning?.querySelector('.graph-container')).toBeNull();
+    });
+
+    it('should not throw while sorting a row without an entity key', () => {
+      element.hass = hass;
+      // No name either, so the name comparator really does reach `undefined`,
+      // and second in the list so it lands on the left-hand side of a compare.
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.test', {} as unknown as string],
+        sort: { method: 'name' },
+      });
+      expect(() => (element as unknown as { _getSortedEntities(): unknown })._getSortedEntities()).not.toThrow();
     });
   });
 
@@ -2790,6 +3526,487 @@ describe('BackgroundGraphEntities', () => {
       expect(transform?.(NaN)).toBeNaN();
       expect(transform?.(Infinity)).toBe(Infinity);
       expect(warnSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Custom element registration', () => {
+    it('does not register a placeholder ha-switch', () => {
+      // Home Assistant ships ha-switch in a lazily loaded chunk. A placeholder from
+      // this bundle can win the race and make HA's own define() throw, which breaks
+      // every toggle and the settings pages.
+      expect(customElements.get('ha-switch')).toBeUndefined();
+    });
+
+    it('lets Home Assistant define ha-switch after a toggle row has rendered', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      // Precondition, asserted here so this test fails on its own if the bundle ever
+      // registers a placeholder again: the toggle the card just rendered must still be
+      // an un-upgraded element waiting for Home Assistant's lazily loaded chunk.
+      expect(customElements.get('ha-switch')).toBeUndefined();
+
+      const toggle = element.shadowRoot?.querySelector<HaSwitch>('ha-switch');
+      expect(toggle).not.toBeNull();
+      expect(customElements.get(toggle!.localName)).toBeUndefined();
+      // Lit wrote `checked` as a plain own property on the un-upgraded element.
+      expect(Object.prototype.hasOwnProperty.call(toggle!, 'checked')).toBe(true);
+      expect(toggle?.checked).toBe(true);
+
+      // Home Assistant's own ha-switch is a LitElement with a reactive `checked`
+      // property, so the upgrade installs a prototype accessor that would shadow the
+      // own property set above unless ReactiveElement rescues it. Replay that upgrade
+      // against exactly such a class. The tag name is unique to this test so no global
+      // `ha-switch` registration leaks into the rest of the file and the tests stay
+      // order-independent.
+      const probeTag = 'ha-switch-upgrade-probe';
+      expect(customElements.get(probeTag)).toBeUndefined();
+
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      // Same binding the card uses: a property set before the element is defined.
+      litRender(html`<ha-switch-upgrade-probe .checked=${true}></ha-switch-upgrade-probe>`, container);
+
+      const probe = container.querySelector<HaSwitch>(probeTag);
+      expect(probe).not.toBeNull();
+      expect(Object.prototype.hasOwnProperty.call(probe!, 'checked')).toBe(true);
+
+      class HaSwitchLike extends LitElement {
+        static properties = { checked: { type: Boolean } };
+        checked = false;
+        protected render(): TemplateResult {
+          return html`<slot></slot>`;
+        }
+      }
+      expect(() => customElements.define(probeTag, HaSwitchLike)).not.toThrow();
+
+      // The element is upgraded in place and keeps the property set before the upgrade,
+      // even though the class declares a reactive `checked` that defaults to false.
+      expect(probe).toBeInstanceOf(HaSwitchLike);
+      await (probe as unknown as LitElement).updateComplete;
+      expect(probe?.checked).toBe(true);
+      // Guard against a vacuous pass: a fresh instance of the same class is false, so
+      // `true` above can only come from the property set before the upgrade.
+      expect(document.createElement(probeTag) as HaSwitch).toHaveProperty('checked', false);
+
+      container.remove();
+    });
+
+    it('survives a second load of the bundle without a duplicate define or picker entry', async () => {
+      // A duplicate Lovelace resource entry loads this bundle twice.
+      const entriesBefore = (window.customCards ?? []).filter((card) => card.type === 'background-graph-entities');
+      expect(entriesBefore).toHaveLength(1);
+
+      vi.resetModules();
+      await expect(import('../src/background-graph-entities')).resolves.toBeDefined();
+
+      const entriesAfter = (window.customCards ?? []).filter((card) => card.type === 'background-graph-entities');
+      expect(entriesAfter).toHaveLength(1);
+    });
+
+    it('registers the editor element only once when its module loads again', async () => {
+      await import('../src/editor');
+      expect(customElements.get('background-graph-entities-editor')).toBeDefined();
+
+      vi.resetModules();
+      await expect(import('../src/editor')).resolves.toBeDefined();
+    });
+  });
+
+  describe('Non-positive config numbers', () => {
+    const windowCalls = () =>
+      (hass.callWS as Mock).mock.calls.filter(([message]) => message?.type === 'history/history_during_period') as [
+        { start_time: string; end_time: string },
+      ][];
+
+    /** Hours between the requested window's bounds. */
+    const requestedHours = (): number => {
+      const [message] = windowCalls()[0];
+      return (new Date(message.end_time).getTime() - new Date(message.start_time).getTime()) / 3_600_000;
+    };
+
+    it('falls back to the default when hours_to_show is negative', async () => {
+      element.hass = hass;
+      // `hours_to_show || DEFAULT` let -5 through, so the window ended before it
+      // started and the card drew an empty graph with no hint why.
+      element.setConfig({ ...config, hours_to_show: -5 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(requestedHours()).toBeCloseTo(24, 5);
+    });
+
+    // A guard, not a fix test: `0 || DEFAULT` already fell back. It is kept so a
+    // future rewrite of the coercion cannot lose the documented zero case.
+    it('falls back to the default when hours_to_show is zero', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 0 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(requestedHours()).toBeCloseTo(24, 5);
+    });
+
+    it('falls back to the default line width when line_width is negative', async () => {
+      vi.useFakeTimers();
+      try {
+        const now = new Date('2023-01-01T12:00:00Z');
+        vi.setSystemTime(now);
+        (hass.callWS as Mock).mockResolvedValue({
+          'sensor.test': [
+            { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '5' },
+            { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '15' },
+          ],
+        });
+        element.hass = hass;
+        element.setConfig({ ...config, line_width: -2, hours_to_show: 2, points_per_hour: 1 });
+        await element.updateComplete;
+        await element.updateComplete;
+        await flushFrames();
+
+        const path = element.shadowRoot?.querySelector('.graph-path');
+        expect(path, 'Graph path should exist').not.toBeNull();
+        // A negative stroke width is not a thinner line, it is invalid SVG - d3
+        // wrote `stroke-width="-2"` out verbatim.
+        expect(path?.getAttribute('stroke-width')).toBe('3');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps refreshing on the default interval when update_interval is negative', async () => {
+      vi.useFakeTimers();
+      try {
+        element.hass = hass;
+        element.setConfig({ ...config, update_interval: -30 });
+        await element.updateComplete;
+        await element.updateComplete;
+        const before = (hass.callWS as Mock).mock.calls.length;
+
+        // `interval > 0` silently swallowed a negative value, which switched
+        // refreshing off just as effectively as the documented 0.
+        await vi.advanceTimersByTimeAsync(600 * 1000 + 10);
+        expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("The card's own unavailable/unknown wording", () => {
+    /**
+     * `hass.localize` returns an empty string for a key it cannot resolve, which
+     * is what the frontend does until the state translations have loaded. The
+     * core keys are preferred whenever they resolve - they are the wording users
+     * already know - and only then does the card fall back to its own bundle.
+     */
+    const withoutStateTranslations = (language: string): HomeAssistant => ({
+      ...hass,
+      language,
+      localize: () => '',
+    });
+
+    it('names an unavailable state in the user language when HA cannot', async () => {
+      hass.states['sensor.test'] = {
+        entity_id: 'sensor.test',
+        state: 'unavailable',
+        attributes: { friendly_name: 'Test Sensor' },
+      };
+      element.setConfig(config);
+      element.hass = withoutStateTranslations('de');
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('Nicht verfügbar');
+    });
+
+    it('names an unknown state in the user language when HA cannot', async () => {
+      hass.states['sensor.test'] = {
+        entity_id: 'sensor.test',
+        state: 'unknown',
+        attributes: { friendly_name: 'Test Sensor' },
+      };
+      element.setConfig(config);
+      element.hass = withoutStateTranslations('fr');
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('Inconnu');
+    });
+
+    it('names a missing entity in the user language when HA cannot', async () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.missing'] });
+      element.hass = withoutStateTranslations('de');
+      await element.updateComplete;
+
+      const row = element.shadowRoot?.querySelector('.entity-row.unavailable');
+      expect(row?.querySelector('.entity-value')?.textContent?.trim()).toBe('Nicht verfügbar');
+    });
+
+    it('names a missing companion entity in the user language when HA cannot', async () => {
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', extra_value_entity: 'sensor.missing' }],
+      });
+      element.hass = withoutStateTranslations('fr');
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.extra-value')?.textContent?.trim()).toBe('Indisponible');
+    });
+
+    it("still prefers HA's own wording whenever it resolves", async () => {
+      hass.states['sensor.test'] = {
+        entity_id: 'sensor.test',
+        state: 'unavailable',
+        attributes: { friendly_name: 'Test Sensor' },
+      };
+      element.setConfig(config);
+      element.hass = { ...hass, language: 'de', localize: () => 'Nicht bereit' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('Nicht bereit');
+    });
+  });
+
+  describe('Quoted config numbers', () => {
+    const windowCalls = () =>
+      (hass.callWS as Mock).mock.calls.filter(([message]) => message?.type === 'history/history_during_period') as [
+        { start_time: string; end_time: string },
+      ][];
+
+    const requestedHours = (): number => {
+      const [message] = windowCalls()[0];
+      return (new Date(message.end_time).getTime() - new Date(message.start_time).getTime()) / 3_600_000;
+    };
+
+    /**
+     * Quoting a number in YAML is legal and common, and `config.value || DEFAULT`
+     * accepted it by coincidence. A `typeof value === 'number'` guard would have
+     * reset every such config to the defaults on upgrade, so these numbers are
+     * coerced before they are validated.
+     */
+    it('reads a quoted hours_to_show as the window it says', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: '12' as unknown as number });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(requestedHours()).toBeCloseTo(12, 5);
+    });
+
+    it('reads a quoted line_width as that stroke width', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2023-01-01T12:00:00Z'));
+        (hass.callWS as Mock).mockResolvedValue({
+          'sensor.test': [
+            { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '5' },
+            { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '15' },
+          ],
+        });
+        element.hass = hass;
+        element.setConfig({
+          ...config,
+          line_width: '1' as unknown as number,
+          hours_to_show: 2,
+          points_per_hour: 1,
+        });
+        await element.updateComplete;
+        await element.updateComplete;
+        await flushFrames();
+
+        expect(element.shadowRoot?.querySelector('.graph-path')?.getAttribute('stroke-width')).toBe('1');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reads a quoted points_per_hour as that resolution', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2023-01-01T12:00:00Z'));
+        (hass.callWS as Mock).mockResolvedValue({
+          'sensor.test': [{ lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '5' }],
+        });
+
+        /** The drawn path for one points_per_hour value, on its own card. */
+        const graphPath = async (pointsPerHour: unknown): Promise<string> => {
+          const card = document.createElement('background-graph-entities') as BackgroundGraphEntitiesType;
+          document.body.appendChild(card);
+          card.hass = hass;
+          card.setConfig({ ...config, hours_to_show: 1, points_per_hour: pointsPerHour as number });
+          await card.updateComplete;
+          await card.updateComplete;
+          await flushFrames();
+          const drawn = card.shadowRoot?.querySelector('.graph-path')?.getAttribute('d') ?? '';
+          card.remove();
+          return drawn;
+        };
+
+        /**
+         * How many curve segments the path is drawn from - one per downsampled
+         * point. The coordinates themselves drift by a fraction of a pixel
+         * between renders because the window ends at "now".
+         */
+        const segments = (drawn: string): number => (drawn.match(/C/g) ?? []).length;
+
+        // A discarded string collapsed the resolution to the default of 1.
+        expect(segments(await graphPath('6'))).toBe(segments(await graphPath(6)));
+        expect(segments(await graphPath('6'))).toBeGreaterThan(segments(await graphPath(undefined)));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reads a quoted update_interval as that interval', async () => {
+      vi.useFakeTimers();
+      try {
+        element.hass = hass;
+        element.setConfig({ ...config, update_interval: '12' as unknown as number });
+        await element.updateComplete;
+        await element.updateComplete;
+        const before = (hass.callWS as Mock).mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(12 * 1000 + 10);
+        expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('still switches refreshing off for a quoted zero', async () => {
+      vi.useFakeTimers();
+      try {
+        element.hass = hass;
+        element.setConfig({ ...config, update_interval: '0' as unknown as number });
+        await element.updateComplete;
+        await element.updateComplete;
+        const before = (hass.callWS as Mock).mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(600 * 1000 + 10);
+        expect((hass.callWS as Mock).mock.calls.length).toBe(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('Localized strings', () => {
+    it('localizes the missing-entities error once hass is available', () => {
+      element.hass = { ...hass, language: 'de' };
+      expect(() => element.setConfig({ type: 'custom:background-graph-entities', entities: [] })).toThrow(
+        'Du musst mindestens eine Entität angeben',
+      );
+    });
+
+    it('keeps the English error when hass is not set yet', () => {
+      expect(() => element.setConfig({ type: 'custom:background-graph-entities', entities: [] })).toThrow(
+        'You need to define at least one entity',
+      );
+    });
+
+    it('translates the duration units, not just the digits', async () => {
+      hass.states['sensor.uptime'] = {
+        entity_id: 'sensor.uptime',
+        state: '75.5',
+        attributes: { friendly_name: 'Uptime', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.uptime'] });
+      element.hass = { ...hass, language: 'de' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('1 Std. 15 Min.');
+    });
+
+    it('names the toggle the way the row names it, translated', async () => {
+      // The label skipped `friendly_name`, so a row reading "Test Switch"
+      // announced itself to a screen reader as "switch.test umschalten".
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: [{ entity: 'switch.test' }] });
+      element.hass = { ...hass, language: 'de' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('ha-switch')?.getAttribute('aria-label')).toBe('Test Switch umschalten');
+    });
+
+    it('falls back to the entity id when the entity has no name at all', async () => {
+      hass.states['switch.test'] = { entity_id: 'switch.test', state: 'on', attributes: {} };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: [{ entity: 'switch.test' }] });
+      element.hass = { ...hass, language: 'de' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('ha-switch')?.getAttribute('aria-label')).toBe('switch.test umschalten');
+    });
+
+    it('translates the tile-style toggle aria-label', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: [{ entity: 'switch.test', name: 'Lampe' }],
+      });
+      element.hass = { ...hass, language: 'fr' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.icon-container')?.getAttribute('aria-label')).toBe('Basculer Lampe');
+    });
+  });
+
+  describe('Truncated entity names', () => {
+    const longName = 'A very long entity name that the card truncates with an ellipsis';
+
+    it('exposes the full name as a title on a normal row', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test', name: longName }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe(longName);
+    });
+
+    it('exposes the full name as a title on a tile-style row', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: [{ entity: 'sensor.test', name: longName }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe(longName);
+    });
+
+    it('falls back to the friendly name for the title', async () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe('Test Sensor');
+    });
+
+    it('exposes the name as a title on a problem row too', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.missing', name: longName }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.getAttribute('title')).toBe(longName);
     });
   });
 });

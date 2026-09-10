@@ -7,7 +7,18 @@ import prettierConfig from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'playwright-report/**', 'test-results/**', 'node_modules/**'],
+    // The -ha variants are the Home Assistant suite's report and trace output.
+    // They are gitignored but not eslint-ignored, so the first retained trace
+    // put a minified copy of the trace viewer in front of the linter and broke
+    // `npm run lint` - a required gate - until the directory was deleted.
+    ignores: [
+      'dist/**',
+      'playwright-report/**',
+      'playwright-report-ha/**',
+      'test-results/**',
+      'test-results-ha/**',
+      'node_modules/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

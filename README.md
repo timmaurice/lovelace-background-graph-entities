@@ -96,8 +96,8 @@ The card is fully configurable through the UI editor.
 | `tile_style`       | boolean | `false`      | Enables a more compact, tile-like layout. The entity value is placed below the name, and toggles are replaced by an interactive icon.                                                                                                                                                                                                                                |
 | `title`            | string  | `''`         | The title of the card.                                                                                                                                                                                                                                                                                                                                               |
 | `average_in_title` | boolean | `false`      | Automatically calculates the average of all numeric entities and displays it on the right side of the card's title. If no title is defined, it will display the average as the title itself. **Note:** This option only makes sense when comparing data of the same type (e.g., all temperatures or all humidities); averaging different metrics is not recommended. |
-| `hours_to_show`    | number  | `24`         | The number of hours of history to display in the graphs.                                                                                                                                                                                                                                                                                                             |
-| `line_width`       | number  | `3`          | The width of the graph line in pixels.                                                                                                                                                                                                                                                                                                                               |
+| `hours_to_show`    | number  | `24`         | The number of hours of history to display in the graphs. Must be greater than `0`; a zero or negative value is ignored and the default applies.                                                                                                                                                                                                                      |
+| `line_width`       | number  | `3`          | The width of the graph line in pixels. Must be greater than `0`; a zero or negative value is ignored and the default applies.                                                                                                                                                                                                                                        |
 | `line_opacity`     | number  | `0.2`        | The opacity of the graph line. The UI slider allows values from 0.05 (mostly transparent) to 0.8 (more opaque).                                                                                                                                                                                                                                                      |
 | `line_color`       | string  | Theme-aware  | The color of the graph line. Can be any valid CSS color. Defaults to `white` in dark mode and `black` in light mode. Ignored if `color_thresholds` is used.                                                                                                                                                                                                          |
 | `line_length`      | string  | `long`       | The length of the graph. Can be `long` or `short`. `short` provides more space for the entity value.                                                                                                                                                                                                                                                                 |
@@ -107,10 +107,21 @@ The card is fully configurable through the UI editor.
 | `color_thresholds` | list    | `[]`         | A list of color thresholds to create a gradient line. See Advanced Example.                                                                                                                                                                                                                                                                                          |
 | `graph_min`        | number  | `undefined`  | Sets a fixed lower bound for the Y-axis of the graph.                                                                                                                                                                                                                                                                                                                |
 | `graph_max`        | number  | `undefined`  | Sets a fixed upper bound for the Y-axis of the graph.                                                                                                                                                                                                                                                                                                                |
-| `points_per_hour`  | number  | `1`          | The number of time buckets per hour. The card calculates the median value for each bucket and fills in any gaps with the last known value to create a continuous graph (unless `show_gaps` is enabled). Higher values provide more detail but may impact performance.                                                                                                |
-| `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes).                                                                                                                                                                                                                                                                                                |
+| `points_per_hour`  | number  | `1`          | The number of time buckets per hour. The card calculates a time-weighted average for each bucket and fills in any gaps with the last known value to create a continuous graph (unless `show_gaps` is enabled). Higher values provide more detail but may impact performance. Must be greater than `0`; a zero or negative value is ignored and the default applies.  |
+| `update_interval`  | number  | `600`        | How often to fetch history data, in seconds (e.g., 600 = 10 minutes). Set to `0` to never refresh. A negative value is a typo rather than a shorter interval, so it is ignored and the default applies.                                                                                                                                                              |
 | `show_icon`        | boolean | `true`       | Set to `false` to hide the entity icon.                                                                                                                                                                                                                                                                                                                              |
 | `sort`             | object  | `undefined`  | Optional settings to auto-sort the entity list dynamically. See [Sorting Configuration](#sorting-configuration) below.                                                                                                                                                                                                                                               |
+
+> [!NOTE]
+> **Out-of-range numbers already saved in a dashboard.** Older releases passed a negative
+> `hours_to_show`, `line_width` or `points_per_hour` straight through: a negative `hours_to_show`
+> opened a window that ended before it started and drew nothing at all, and a negative
+> `line_width` wrote invalid SVG. A negative `update_interval` switched refreshing off entirely,
+> as silently as the documented `0`. Such a value is now ignored in favour of the documented
+> default, so a card that carries one draws a normal 24h graph and polls every 600s after the
+> upgrade. Nothing is rewritten: the visual editor keeps showing the number that is stored until
+> you edit that field, so correct it there or in YAML. `update_interval: 0` is unaffected - it is
+> the documented way to switch refreshing off, not an out-of-range value.
 
 ### Sorting Configuration
 
@@ -397,7 +408,11 @@ To contribute to the development, you'll need to set up a build environment.
     npm run demo
     ```
 
-    Then, open your browser and navigate to `http://localhost:3000/demo/index.html`.
+    Then, open your browser and navigate to `http://localhost:3000/demo/`.
+
+    > Keep the trailing slash. `serve` rewrites `/demo/index.html` to `/demo`, and from
+    > there the page's relative `mocks.js` and `main.js` resolve against the site root
+    > and 404, so the demo comes up empty.
 
     For a complete development environment (build watcher + demo server):
 

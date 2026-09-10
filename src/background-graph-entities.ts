@@ -1,5 +1,5 @@
 import { LitElement, TemplateResult, html, css, unsafeCSS } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import {
   HomeAssistant,
   LovelaceCard,
@@ -14,14 +14,29 @@ import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
 import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
-import { compileValueTransform, downsampleHistory, formatNumber, MS_IN_S, S_IN_MIN, ValueTransform } from './utils.js';
+import {
+  compileValueTransform,
+  downsampleHistory,
+  formatNumber,
+  MS_IN_H,
+  MS_IN_S,
+  coerceNumber,
+  positiveOr,
+  S_IN_MIN,
+  ValueTransform,
+} from './utils.js';
 import { extent, max as d3max, min as d3min } from 'd3-array';
+import { EntityProblem, resolveEntity } from './entity.js';
+import { localize } from './localize.js';
 
 // Default configuration values
 const DEFAULT_HOURS_TO_SHOW = 24;
 const DEFAULT_LINE_WIDTH = 3;
 const DEFAULT_LINE_OPACITY = 0.2;
 const DEFAULT_POINTS_PER_HOUR = 1;
+// Matches the default the README documents. Without it the card fetched history
+// exactly once and then never again, so an unconfigured card froze forever.
+const DEFAULT_UPDATE_INTERVAL = 600;
 const DEFAULT_CURVE = 'spline';
 
 // D3/Rendering constants
@@ -32,10 +47,27 @@ const GRAPH_DOT_RADIUS = 2;
 const ELEMENT_NAME = 'background-graph-entities';
 const EDITOR_ELEMENT_NAME = `${ELEMENT_NAME}-editor`;
 const UNAVAILABLE_ICON = 'mdi:alert-circle-outline';
-const UNAVAILABLE_TEXT = 'Unavailable';
-const UNKNOWN_TEXT = 'Unknown';
+// Only reached when `hass.localize` has no answer, so they still go through
+// the card's own translations rather than staying English.
+const UNAVAILABLE_KEY = 'component.bge.card.unavailable';
+const UNKNOWN_KEY = 'component.bge.card.unknown';
 // Upper bound for an inferred fraction-digit count handed to Intl.NumberFormat.
 const MAX_FRACTION_DIGITS = 20;
+
+// Only `not_configured` reaches this map today. `not_found` is listed but never
+// read - _renderProblemRow branches to Home Assistant's own "Unavailable"
+// wording for it, which is what the card has always shown - and `wrong_domain`
+// and `not_numeric` cannot be produced at all, because the render path calls
+// resolveEntity() without the options that raise them. The entries stay because
+// the Record type demands one per reason; they become live the moment a caller
+// passes `domains` or `numeric`.
+const PROBLEM_MESSAGE_KEYS: Record<EntityProblem, string> = {
+  not_configured: 'no_entity',
+  not_found: 'not_found',
+  wrong_domain: 'wrong_domain',
+  unavailable: 'no_entity',
+  not_numeric: 'not_numeric',
+};
 
 const CURVE_FACTORIES = {
   linear: curveLinear,
@@ -56,6 +88,13 @@ declare global {
   }
 }
 
+interface HistorySeries {
+  raw: { timestamp: Date; value: number }[];
+  downsampled: { timestamp: Date; value: number }[];
+}
+
+type HistoryMap = Map<string, HistorySeries>;
+
 interface LovelaceCardHelpers {
   createCardElement(config: LovelaceCardConfig): Promise<LovelaceCard>;
 }
@@ -69,20 +108,16 @@ type LovelaceCardConstructor = {
   getConfigElement(): Promise<LovelaceCardEditor>;
 };
 
-@customElement(ELEMENT_NAME)
 export class BackgroundGraphEntities extends LitElement implements LovelaceCard {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @property({ type: Boolean, reflect: true }) public editMode = false;
   @state() private _config!: BackgroundGraphEntitiesConfig;
   @state() private _entities: EntityConfig[] = [];
-  @state() private _history: Map<
-    string,
-    {
-      raw: { timestamp: Date; value: number }[];
-      downsampled: { timestamp: Date; value: number }[];
-    }
-  > = new Map();
+  @state() private _history: HistoryMap = new Map();
   private _historyFetched = false;
+  // The history-relevant slice of the config, so an unrelated edit does not
+  // throw away data that is still correct.
+  private _historySignature?: string;
   private _timerId?: number;
   // Compiled value_transform functions, memoized per entity+expression so config
   // rebuilds (e.g. editor edits) neither recompile nor re-warn. `null` caches a
@@ -90,11 +125,18 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   private _transformCache = new Map<string, ValueTransform | null>();
 
   private _renderRetryMap = new Map<HTMLElement, number>();
+  private _resizeObserver?: ResizeObserver;
+  private _resizeFrame?: number;
   private _lastSortedEntityIds: string[] = [];
 
   public setConfig(config: BackgroundGraphEntitiesConfig): void {
     if (!config || !config.entities || !Array.isArray(config.entities) || config.entities.length === 0) {
-      throw new Error('You need to define at least one entity');
+      // setConfig can run before `hass` is set, and `localize` needs it.
+      throw new Error(
+        this.hass
+          ? localize(this.hass, 'component.bge.card.no_entities_defined')
+          : 'You need to define at least one entity',
+      );
     }
 
     this._config = config;
@@ -102,15 +144,28 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       typeof entityConf === 'string' ? { entity: entityConf } : entityConf,
     );
 
-    // When config changes, we need to refetch history.
-    this._historyFetched = false;
-    this._history = new Map();
+    // Only refetch when the config actually changes what the recorder would be
+    // asked for. Typing in the visual editor calls setConfig on every keystroke,
+    // and unconditional invalidation turned ten characters in the title field
+    // into ten full history reloads.
+    const signature = JSON.stringify([
+      this._entities.map((entityConf) => entityConf.graph_entity || entityConf.entity),
+      config.hours_to_show ?? null,
+      config.points_per_hour ?? null,
+      config.show_gaps === true,
+    ]);
+    if (signature !== this._historySignature) {
+      this._historySignature = signature;
+      this._historyFetched = false;
+      this._history = new Map();
+    }
     this._setupUpdateInterval();
   }
 
   connectedCallback(): void {
     super.connectedCallback();
     this._setupUpdateInterval();
+    this._observeResize();
   }
 
   disconnectedCallback(): void {
@@ -119,14 +174,40 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       clearInterval(this._timerId);
       this._timerId = undefined;
     }
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+    if (this._resizeFrame !== undefined) {
+      cancelAnimationFrame(this._resizeFrame);
+      this._resizeFrame = undefined;
+    }
     this._renderRetryMap.clear();
+  }
+
+  // Each graph is an svg with a pixel viewBox and `preserveAspectRatio="none"`,
+  // so a column that changes width stretches the strokes instead of redrawing
+  // them. Redraw on resize; coalesced into one frame because the observer fires
+  // for every step of a drag.
+  private _observeResize(): void {
+    if (this._resizeObserver || typeof ResizeObserver === 'undefined') return;
+    this._resizeObserver = new ResizeObserver(() => {
+      if (this._resizeFrame !== undefined) cancelAnimationFrame(this._resizeFrame);
+      this._resizeFrame = requestAnimationFrame(() => {
+        this._resizeFrame = undefined;
+        this._renderAllGraphs();
+      });
+    });
+    this._resizeObserver.observe(this);
   }
 
   private _setupUpdateInterval(): void {
     if (this._timerId) clearInterval(this._timerId);
     if (!this._config) return;
-    const interval = this._config.update_interval;
-    if (interval) this._timerId = window.setInterval(() => this._fetchAndStoreAllHistory(), interval * MS_IN_S);
+    // An explicit 0 is the documented way to switch refreshing off; anything
+    // negative is not a shorter interval but a typo, so it falls back instead.
+    // A quoted YAML `"0"` means the same as a bare `0`, so coerce before both.
+    const configured = coerceNumber(this._config.update_interval);
+    const interval = configured === 0 ? 0 : positiveOr(configured, DEFAULT_UPDATE_INTERVAL);
+    if (interval > 0) this._timerId = window.setInterval(() => this._fetchAndStoreAllHistory(), interval * MS_IN_S);
   }
 
   public static async getConfigElement(): Promise<LovelaceCardEditor> {
@@ -147,10 +228,47 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return document.createElement(EDITOR_ELEMENT_NAME) as LovelaceCardEditor;
   }
 
-  public static getStubConfig(): Record<string, unknown> {
+  /**
+   * The config the card picker previews with.
+   *
+   * It used to hard-code `sun.sun`, whose state is a word and whose history is
+   * therefore ungraphable - the preview showed a row and no graph at all. A
+   * numeric sensor is picked instead, from the ids Home Assistant offers and
+   * otherwise from the whole state machine. `hours_to_show` is gone: it only
+   * repeated the default, and a stub should carry nothing a user did not choose.
+   */
+  public static getStubConfig(hass?: HomeAssistant, entities?: string[]): Record<string, unknown> {
+    // `hass` is genuinely absent on some picker paths, so nothing here may
+    // dereference it without a guard.
+    const candidates = entities?.length ? entities : Object.keys(hass?.states ?? {});
+    const graphable = (id: string, domains?: string[]): boolean =>
+      resolveEntity(hass, id, { domains, numeric: true }).ok;
+
+    const pick =
+      candidates.find((id) => graphable(id, ['sensor'])) ?? candidates.find((id) => graphable(id)) ?? candidates[0];
+
+    // An empty id renders the card's own "no entity configured" row, which is a
+    // better preview than a throw from setConfig.
+    return { entities: [{ entity: pick ?? '' }] };
+  }
+
+  /**
+   * Sizing for sections dashboards. A row is 40px tall with an 8px gap, the
+   * content adds 16px of padding top and bottom, and a header adds 72px. Home
+   * Assistant's grid row is 56px with an 8px gap, hence the /64.
+   */
+  public getGridOptions(): Record<string, number> {
+    const rowCount = this._config?.entities?.length ?? 1;
+    const isTile = this._config?.tile_style === true;
+    const rowHeight = isTile ? 34 + 8 : 40 + 8;
+    const padding = isTile ? 20 : 32;
+    const header = this._config?.title || this._config?.average_in_title ? 72 : 0;
+    const pixels = padding + header + rowCount * rowHeight - 8;
     return {
-      entities: [{ entity: 'sun.sun' }],
-      hours_to_show: DEFAULT_HOURS_TO_SHOW,
+      rows: Math.max(1, Math.ceil((pixels + 8) / 64)),
+      min_rows: 1,
+      columns: 12,
+      min_columns: 6,
     };
   }
 
@@ -197,8 +315,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         // different transforms/appearance, and find-by-id would give them all
         // the first row's config.
         const indexed = this._entities[Number(container.dataset.entityIndex)];
-        const entityConfig =
-          indexed?.entity === entityId ? indexed : this._entities.find((e) => e.entity === entityId)!;
+        const entityConfig = indexed?.entity === entityId ? indexed : this._entities.find((e) => e.entity === entityId);
+        if (!entityConfig) return;
         const graphEntityId = entityConfig.graph_entity || entityId;
         const historyData = this._history.get(graphEntityId);
         // Transform here rather than at fetch time: stored history can be shared
@@ -312,12 +430,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   private _pickHistoryValue(
-    historyData:
-      | {
-          raw: { value: number }[];
-          downsampled: { value: number }[];
-        }
-      | undefined,
+    historyData: HistorySeries | undefined,
     source: 'latest' | 'max' | 'min' | 'avg' | 'median',
     transform?: ValueTransform,
   ): number | undefined {
@@ -454,8 +567,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       let comparison = 0;
 
       if (method === 'name') {
-        const nameA = a.name || stateObjA?.attributes.friendly_name || a.entity;
-        const nameB = b.name || stateObjB?.attributes.friendly_name || b.entity;
+        // `|| ''` because a row can be missing its `entity` key entirely, and
+        // `undefined.localeCompare` took the whole card down.
+        const nameA = a.name || stateObjA?.attributes.friendly_name || a.entity || '';
+        const nameB = b.name || stateObjB?.attributes.friendly_name || b.entity || '';
         comparison = nameA.localeCompare(nameB, this.hass.language || 'en', {
           sensitivity: 'base',
           numeric: numeric,
@@ -537,8 +652,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   // HA reports these two states for every domain. They are words, not measurements, so
   // they must never be run through number formatting or get a unit appended ("unknown °C").
   private _localizeSpecialState(state: string): string | undefined {
-    if (state === 'unavailable') return this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
-    if (state === 'unknown') return this.hass.localize('state.default.unknown') || UNKNOWN_TEXT;
+    if (state === 'unavailable')
+      return this.hass.localize('state.default.unavailable') || localize(this.hass, UNAVAILABLE_KEY);
+    if (state === 'unknown') return this.hass.localize('state.default.unknown') || localize(this.hass, UNKNOWN_KEY);
     return undefined;
   }
 
@@ -563,7 +679,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     let value: string;
     if (!stateObj) {
-      value = this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT;
+      value = this.hass.localize('state.default.unavailable') || localize(this.hass, UNAVAILABLE_KEY);
     } else {
       const specialState = this._localizeSpecialState(stateObj.state);
       if (specialState) {
@@ -589,11 +705,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             : 0;
           precision = Math.max(rawDecimals, this._transformPrecisionFloor(num));
         }
-        const formattedValue =
-          !isNaN(num) && typeof precision === 'number'
-            ? formatNumber(num, this.hass.locale, precision)
-            : stateObj.state;
-        value = [formattedValue, unit].filter(Boolean).join(' ');
+        if (!Number.isFinite(num)) {
+          // Same rule as the main value: a text state gets no unit.
+          value = stateObj.state;
+        } else {
+          const formattedValue =
+            typeof precision === 'number' ? formatNumber(num, this.hass.locale, precision) : stateObj.state;
+          value = [formattedValue, unit].filter(Boolean).join(' ');
+        }
       }
     }
 
@@ -601,8 +720,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   private _renderEntityRow(entityConfig: EntityConfig): TemplateResult {
+    const resolved = resolveEntity(this.hass, entityConfig.entity);
+    // `unavailable`/`unknown` keep a normal row: the value column localises the
+    // state, which tells the user more than a warning row would. Everything else
+    // is a configuration problem the row has to name.
+    if (!resolved.ok && resolved.reason !== 'unavailable') {
+      return this._renderProblemRow(entityConfig, resolved.reason);
+    }
     const stateObj = this.hass.states[entityConfig.entity];
-    if (!stateObj) return this._renderUnavailableEntityRow(entityConfig);
     const entityDisplay = this.hass.entities[entityConfig.entity];
     // Lets _renderAllGraphs resolve THIS row's config even when the same entity
     // appears in several rows (reference identity, so duplicates resolve too).
@@ -633,6 +758,19 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       : undefined;
 
     const iconStyle = iconColor ? `color: ${iconColor}` : '';
+    // The row is a click target, so it has to be reachable and operable from the
+    // keyboard too. Keys that reach a nested control (the icon toggle, the
+    // switch) are left alone - those bring their own handlers.
+    const rowLabel = entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity;
+    // The same name the row shows: skipping `friendly_name` made a row reading
+    // "Test Switch" announce itself as "switch.test".
+    const toggleLabel = localize(this.hass, 'component.bge.card.toggle_entity', { name: rowLabel });
+    const handleRowKeydown = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target !== e.currentTarget) return;
+      e.preventDefault();
+      this._openEntityPopup(entityConfig.entity);
+    };
     const handleKeyboardToggle = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -661,14 +799,25 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     if (specialState) {
       displayValue = specialState;
+    } else if (!Number.isFinite(effectiveNum)) {
+      // A text state ("above_horizon", "heating", "on") is a word, not a
+      // measurement. Running it through the numeric paths produced
+      // "above_horizon °C" and, for a minutes unit, "NaN min".
+      displayValue = effectiveStateString;
     } else if (unit.toLowerCase() === 'min') {
-      // Special formatting for time in minutes
+      // Special formatting for time in minutes. The numbers go through the same
+      // locale-aware formatter as every other value - built straight from a JS
+      // number they carried no thousands separator, so a four-digit hour count
+      // read differently from every other number on the card.
       if (effectiveNum >= S_IN_MIN) {
         const hours = Math.floor(effectiveNum / S_IN_MIN);
-        const minutes = effectiveNum % S_IN_MIN;
-        displayValue = `${hours}h ${Math.floor(minutes)}min`;
+        const minutes = Math.floor(effectiveNum % S_IN_MIN);
+        displayValue = localize(this.hass, 'component.bge.card.duration_hours_minutes', {
+          hours: formatNumber(hours, this.hass.locale),
+          minutes: formatNumber(minutes, this.hass.locale),
+        });
       } else {
-        displayValue = `${Math.floor(effectiveNum)} ${unit}`;
+        displayValue = `${formatNumber(Math.floor(effectiveNum), this.hass.locale)} ${unit}`;
       }
     } else {
       // Prefer the entity registry's display_precision. When that isn't set,
@@ -702,7 +851,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               ? `--bge-icon-color: ${iconColor};${autoIconColor ? ` --state-active-color: ${autoIconColor};` : ''}`
               : ''
           }
+          role="button"
+          tabindex="0"
+          aria-label=${rowLabel}
           @click=${() => this._openEntityPopup(entityConfig.entity)}
+          @keydown=${handleRowKeydown}
         >
           ${
             showIcon
@@ -710,7 +863,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
                   <div
                     class="icon-container ${isBooleanState ? (isActive ? 'active' : 'inactive') : ''}"
                     role=${isToggleable ? 'button' : 'img'}
-                    aria-label=${isToggleable ? `Toggle ${entityConfig.name || entityConfig.entity}` : ''}
+                    aria-label=${isToggleable ? toggleLabel : ''}
                     aria-pressed=${isToggleable ? isActive : 'false'}
                     tabindex=${isToggleable ? '0' : '-1'}
                     @click=${(e: Event) => {
@@ -738,7 +891,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           }
           <div class="entity-info">
             <div class="entity-name">
-              ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
+              <span class="name-text" title=${rowLabel}>${rowLabel}</span>
             </div>
             <div class="entity-value">
               <span class="primary-value">${displayValue}</span>
@@ -753,7 +906,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
 
     return html`
-      <div class="entity-row ${showIcon ? '' : 'no-icon'}" @click=${() => this._openEntityPopup(entityConfig.entity)}>
+      <div
+        class="entity-row ${showIcon ? '' : 'no-icon'}"
+        role="button"
+        tabindex="0"
+        aria-label=${rowLabel}
+        @click=${() => this._openEntityPopup(entityConfig.entity)}
+        @keydown=${handleRowKeydown}
+      >
         ${
           showIcon
             ? entityConfig.icon
@@ -768,7 +928,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             : ''
         }
         <div class="entity-name">
-          ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
+          <span class="name-text" title=${rowLabel}>${rowLabel}</span>
           ${
             isToggleable && !isTileStyle && secondaryDisplayValue
               ? html`<span class="secondary-value-inline">${secondaryDisplayValue}</span>`
@@ -786,7 +946,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             ? html`
                 <div class="entity-value entity-with-toggle">
                   <ha-switch
-                    aria-label=${`Toggle ${entityConfig.name || entityConfig.entity}`}
+                    aria-label=${toggleLabel}
                     .checked=${stateObj.state === 'on'}
                     @click=${(e: Event) => {
                       e.stopPropagation();
@@ -817,21 +977,48 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     `;
   }
 
-  private _renderUnavailableEntityRow(entityConfig: EntityConfig): TemplateResult {
+  // The one row the card can still draw when an entity cannot be resolved. It
+  // keeps the `unavailable` look for a missing entity - that is what users
+  // already know - and names the other reasons instead of rendering an empty row.
+  private _renderProblemRow(entityConfig: EntityConfig, reason: EntityProblem): TemplateResult {
     const showIcon = entityConfig.show_icon ?? this._config.show_icon ?? true;
+    const message =
+      reason === 'not_found'
+        ? this.hass.localize('state.default.unavailable') || localize(this.hass, UNAVAILABLE_KEY)
+        : localize(this.hass, `component.bge.card.${PROBLEM_MESSAGE_KEYS[reason]}`);
+
     return html`
       <div
         class="entity-row unavailable ${showIcon ? '' : 'no-icon'}"
-        @click=${() => this._openEntityPopup(entityConfig.entity)}
+        role=${entityConfig.entity ? 'button' : 'listitem'}
+        tabindex=${entityConfig.entity ? '0' : '-1'}
+        aria-label=${entityConfig.name || entityConfig.entity || message}
+        @click=${() => entityConfig.entity && this._openEntityPopup(entityConfig.entity)}
+        @keydown=${(e: KeyboardEvent) => {
+          if (!entityConfig.entity || (e.key !== 'Enter' && e.key !== ' ')) return;
+          e.preventDefault();
+          this._openEntityPopup(entityConfig.entity);
+        }}
       >
         ${showIcon ? html`<ha-icon class="entity-icon" icon=${UNAVAILABLE_ICON}></ha-icon>` : ''}
-        <div class="entity-name">${entityConfig.name || entityConfig.entity}</div>
-        <div
-          class="graph-container"
-          data-entity-id=${entityConfig.entity}
-          data-entity-index=${this._entities.indexOf(entityConfig)}
-        ></div>
-        <div class="entity-value">${this.hass.localize('state.default.unavailable') || UNAVAILABLE_TEXT}</div>
+        <div class="entity-name">
+          <span class="name-text" title=${entityConfig.name || entityConfig.entity || ''}
+            >${entityConfig.name || entityConfig.entity || ''}</span
+          >
+        </div>
+        ${
+          // A row with no entity id has nothing to graph, and an empty
+          // `data-entity-id` would send the renderer looking for a config that
+          // does not exist.
+          entityConfig.entity
+            ? html`<div
+                class="graph-container"
+                data-entity-id=${entityConfig.entity}
+                data-entity-index=${this._entities.indexOf(entityConfig)}
+              ></div>`
+            : ''
+        }
+        <div class="entity-value">${message}</div>
       </div>
     `;
   }
@@ -866,10 +1053,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
+    const hoursToShow = positiveOr(this._config?.hours_to_show, DEFAULT_HOURS_TO_SHOW);
     const end = new Date();
-    const start = new Date();
-    start.setHours(end.getHours() - hoursToShow);
+    // Elapsed hours, not wall-clock hours: `setHours` moves by calendar hour, so
+    // across a DST switch the axis covered 23 or 25 real hours while the buckets
+    // covered 24, and every point sat an hour off.
+    const start = new Date(end.getTime() - hoursToShow * MS_IN_H);
 
     const xDomain: [Date, Date] = [start, end];
 
@@ -904,8 +1093,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         ? entityConfig.graph_max
         : this._config.graph_max;
 
-    if (typeof graphMin === 'number') yDomain[0] = graphMin;
-    if (typeof graphMax === 'number') yDomain[1] = graphMax;
+    // Both bounds may legally be quoted in YAML, and a bare `typeof === 'number'`
+    // gate dropped such a bound without a word.
+    const graphMinNum = coerceNumber(graphMin);
+    const graphMaxNum = coerceNumber(graphMax);
+    if (graphMinNum !== undefined) yDomain[0] = graphMinNum;
+    if (graphMaxNum !== undefined) yDomain[1] = graphMaxNum;
 
     if (yDomain[0] === yDomain[1]) {
       yDomain[0] -= 1;
@@ -913,8 +1106,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
 
     const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR; // Use padding only if bounds are not fixed
-    if (typeof graphMin !== 'number') yDomain[0] -= yPadding;
-    if (typeof graphMax !== 'number') yDomain[1] += yPadding;
+    if (graphMinNum === undefined) yDomain[0] -= yPadding;
+    if (graphMaxNum === undefined) yDomain[1] += yPadding;
 
     const xScale = scaleTime().domain(xDomain).range([0, width]);
     const yScale = scaleLinear().domain(yDomain).range([height, 0]);
@@ -924,13 +1117,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'none');
 
-    const lineWidth = this._config?.line_width || DEFAULT_LINE_WIDTH;
+    const lineWidth = positiveOr(this._config?.line_width, DEFAULT_LINE_WIDTH);
     const lineOpacity =
       entityConfig?.overwrite_graph_appearance && entityConfig.line_opacity !== undefined
         ? entityConfig.line_opacity
         : (this._config?.line_opacity ?? DEFAULT_LINE_OPACITY);
 
-    const gradientId = `bge-gradient-${container.dataset.entityId?.replace('.', '_')}`;
+    // The row index is part of the id: ids are document-wide, so two rows on the
+    // same entity produced one gradient and the second row silently painted
+    // itself with the first row's colours.
+    const gradientId = `bge-gradient-${container.dataset.entityIndex}-${container.dataset.entityId?.replace(/\./g, '_')}`;
     const strokeColor = this._setupGradient(svg, yScale, gradientId, entityConfig);
 
     const lineGenerator = d3Line<{ timestamp: Date; value: number }>()
@@ -993,45 +1189,24 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (this._history.size > 0) this._history = new Map();
       return;
     }
-    const newHistory = new Map<
-      string,
-      {
-        raw: { timestamp: Date; value: number }[];
-        downsampled: { timestamp: Date; value: number }[];
-      } | null
-    >();
-    const historyPromises = this._entities.map(async (entityConf) => {
-      const entityId = entityConf.graph_entity || entityConf.entity;
-      const history = await this._fetchHistory(entityId, entityConf.entity);
-      newHistory.set(entityId, history);
-    });
-    await Promise.all(historyPromises);
-    // Filter out null histories
-    this._history = new Map(
-      [...newHistory.entries()].filter(([, value]) => value !== null) as [
-        string,
-        {
-          raw: { timestamp: Date; value: number }[];
-          downsampled: { timestamp: Date; value: number }[];
-        },
-      ][],
-    );
+    // One request for every row the card draws. The same entity can back several
+    // rows (and `graph_entity` can point rows at a shared series), so the ids are
+    // de-duplicated first: a 60-row card used to issue 60 websocket calls for
+    // what the recorder answers in one.
+    const entityIds = [...new Set(this._entities.map((conf) => conf.graph_entity || conf.entity).filter(Boolean))];
+    this._history = await this._fetchHistory(entityIds);
   }
 
-  private async _fetchHistory(
-    entityId: string,
-    mainEntityIdForLogging?: string,
-  ): Promise<{
-    raw: { timestamp: Date; value: number }[];
-    downsampled: { timestamp: Date; value: number }[];
-  } | null> {
-    if (!this.hass?.callWS) return null;
+  private async _fetchHistory(entityIds: string[]): Promise<HistoryMap> {
+    const result: HistoryMap = new Map();
+    if (!this.hass?.callWS || entityIds.length === 0) return result;
 
-    const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
-    const pointsPerHour = this._config?.points_per_hour || DEFAULT_POINTS_PER_HOUR;
-
-    const start = new Date();
-    start.setHours(start.getHours() - hoursToShow);
+    const hoursToShow = positiveOr(this._config?.hours_to_show, DEFAULT_HOURS_TO_SHOW);
+    const pointsPerHour = positiveOr(this._config?.points_per_hour, DEFAULT_POINTS_PER_HOUR);
+    const end = new Date();
+    // Same elapsed-hours arithmetic as the axis and the bucket grid, so all
+    // three describe the same window across a DST switch.
+    const start = new Date(end.getTime() - hoursToShow * MS_IN_H);
 
     try {
       const history = await this.hass.callWS<{
@@ -1039,36 +1214,40 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       }>({
         type: 'history/history_during_period',
         start_time: start.toISOString(),
-        end_time: new Date().toISOString(),
-        entity_ids: [entityId],
+        end_time: end.toISOString(),
+        entity_ids: entityIds,
         minimal_response: true,
         no_attributes: true,
         include_start_time_state: true,
       });
 
-      const states = history[entityId];
-      if (!states) {
-        return { raw: [], downsampled: [] };
-      }
-
       // With `show_gaps` enabled, non-numeric states (`unavailable`/`unknown`) are
       // kept as NaN so the graph can render a break for them. Otherwise they are
       // dropped, which makes the line carry the last known value across the outage.
       const showGaps = this._config?.show_gaps === true;
-      const mappedStates = states.map((s) => {
-        let value: number;
-        if (s.s === 'on') value = 1;
-        else if (s.s === 'off') value = 0;
-        else value = Number(s.s);
-        return { timestamp: new Date(s.lu * MS_IN_S), value };
-      });
-      const finalStates = showGaps ? mappedStates : mappedStates.filter((s) => !isNaN(s.value));
-      const downsampled = downsampleHistory(finalStates, hoursToShow, pointsPerHour);
-      return { raw: finalStates, downsampled };
+      for (const entityId of entityIds) {
+        const states = history?.[entityId];
+        if (!states) {
+          result.set(entityId, { raw: [], downsampled: [] });
+          continue;
+        }
+        const mappedStates = states.map((s) => {
+          let value: number;
+          if (s.s === 'on') value = 1;
+          else if (s.s === 'off') value = 0;
+          else value = Number(s.s);
+          return { timestamp: new Date(s.lu * MS_IN_S), value };
+        });
+        const finalStates = showGaps ? mappedStates : mappedStates.filter((s) => !isNaN(s.value));
+        result.set(entityId, {
+          raw: finalStates,
+          downsampled: downsampleHistory(finalStates, hoursToShow, pointsPerHour),
+        });
+      }
     } catch (err) {
-      console.error(`Error fetching history for ${mainEntityIdForLogging || entityId} (using ${entityId}):`, err);
-      return null;
+      console.error(`Error fetching history for ${entityIds.join(', ')}:`, err);
     }
+    return result;
   }
 
   private _getAverageTitleSuffix(): string {
@@ -1163,18 +1342,27 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   `;
 }
 
-if (typeof window !== 'undefined' && !customElements.get('ha-switch')) {
-  // Define a placeholder if ha-switch is not available, to prevent rendering errors.
-  // This is a fallback for environments where core components might not be loaded.
-  customElements.define('ha-switch', class extends HTMLElement {});
+// `ha-switch` is never registered here. Home Assistant ships it in a lazily loaded
+// chunk, so a placeholder definition can win the race and make Home Assistant's own
+// `customElements.define('ha-switch', ...)` throw, which breaks every toggle and the
+// settings pages. The element is rendered unconditionally instead: Lit keeps the
+// properties we set on it and applies them once Home Assistant upgrades the element.
+
+// A duplicate Lovelace resource entry loads this bundle twice. An unguarded define
+// throws on the second pass and takes the whole card down, so only register once.
+if (typeof window !== 'undefined' && !customElements.get(ELEMENT_NAME)) {
+  customElements.define(ELEMENT_NAME, BackgroundGraphEntities);
 }
 
 if (typeof window !== 'undefined') {
   window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: ELEMENT_NAME,
-    name: 'Background Graph Entities',
-    description: 'A card to display entities with a background graph.',
-    documentationURL: 'https://github.com/timmaurice/lovelace-background-graph-entities',
-  });
+  // Same reason: a second load must not add a second card-picker entry.
+  if (!window.customCards.some((card) => card.type === ELEMENT_NAME)) {
+    window.customCards.push({
+      type: ELEMENT_NAME,
+      name: 'Background Graph Entities',
+      description: 'A card to display entities with a background graph.',
+      documentationURL: 'https://github.com/timmaurice/lovelace-background-graph-entities',
+    });
+  }
 }

@@ -1,5 +1,5 @@
 import { LitElement, html, css, TemplateResult, unsafeCSS } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { property, state } from 'lit/decorators.js';
 import {
   HomeAssistant,
   LovelaceCardEditor,
@@ -35,9 +35,14 @@ interface ColorPicker extends HTMLElement {
   configValue?: keyof EditorInternalConfig;
 }
 
+const EDITOR_ELEMENT_NAME = 'background-graph-entities-editor';
+
+// Number fields whose `min` is a mode, not a bound: `update_interval: 0` means
+// "never refresh", so a below-range entry is dropped rather than snapped onto it.
+const MODE_MINIMUM_KEYS = new Set<string>(['update_interval']);
+
 type ThresholdEventTarget = HTMLElement & { value?: string };
 
-@customElement('background-graph-entities-editor')
 export class BackgroundGraphEntitiesEditor extends LitElement implements LovelaceCardEditor {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @state() private _config: EditorInternalConfig = {
@@ -221,11 +226,27 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         value = target.value;
       }
 
-      if (target.type === 'number') {
+      // `type` is a property on HA's inputs but a plain attribute here, so both
+      // are checked - otherwise a number field would be read as free text.
+      if (target.type === 'number' || target.getAttribute('type') === 'number') {
         value = target.value === '' ? undefined : Number(target.value);
+        // `min` is only a browser hint: HA's text field still fires `change` for
+        // an out-of-range value, and the card read `hours_to_show || DEFAULT`,
+        // so a typed `-5` silently produced an empty graph.
+        const min = target.getAttribute('min');
+        if (min !== null && typeof value === 'number' && !isNaN(value) && value < Number(min)) {
+          // Snapping onto the minimum is only safe where it is a bound; where it
+          // is a mode, a typo would silently switch the card off for good.
+          value = MODE_MINIMUM_KEYS.has(String(configValue)) ? undefined : Number(min);
+        }
       }
 
-      if (value === undefined || (typeof value === 'number' && isNaN(value))) {
+      // An empty field means "unset", not `''`. Writing the empty string back
+      // saved a key the user never chose - and for the theme-dependent default
+      // line colour, prefilling the field baked `black`/`white` into the config
+      // the first time the field was touched, after which the card stopped
+      // following the theme.
+      if (value === undefined || value === '' || (typeof value === 'number' && isNaN(value))) {
         delete newConfig[configValue];
       } else {
         newConfig[configValue] = value;
@@ -300,7 +321,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
     let value: string | number | undefined = (ev as CustomEvent).detail?.value ?? target.value;
 
-    if (target.tagName.toLowerCase() === 'ha-slider' || target.type === 'number') {
+    // Same two-way `type` read as the global handler: reading only the property
+    // stored the per-entity graph bounds as strings, which the card then dropped.
+    if (
+      target.tagName.toLowerCase() === 'ha-slider' ||
+      target.type === 'number' ||
+      target.getAttribute('type') === 'number'
+    ) {
       value = target.value === '' ? undefined : Number(target.value);
     }
     // Trailing whitespace forces the YAML dumper into quoted style and pollutes
@@ -1021,8 +1048,11 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   }
 
   protected render(): TemplateResult {
-    if (!this.hass || !this._config) {
-      return html`<div>Waiting for config…</div>`;
+    if (!this.hass) {
+      // The one frame that renders before Home Assistant hands over `hass`, which
+      // `localize` needs to exist at all. Nothing here can be translated, so it
+      // must not be words: English prose reached a German dashboard's editor.
+      return html`<ha-circular-progress indeterminate></ha-circular-progress>`;
     }
 
     if (this._editingIndex !== null) {
@@ -1083,7 +1113,9 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.hours_to_show')}
             type="number"
-            .value=${String(this._config.hours_to_show ?? 24)}
+            min="1"
+            .value=${this._config.hours_to_show ?? ''}
+            .placeholder=${'24'}
             .configValue=${'hours_to_show'}
             @change=${this._valueChanged}
           ></ha-input>
@@ -1091,7 +1123,9 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.line_width')}
             type="number"
-            .value=${String(this._config.line_width ?? 3)}
+            min="1"
+            .value=${this._config.line_width ?? ''}
+            .placeholder=${'3'}
             .configValue=${'line_width'}
             @change=${this._valueChanged}
           ></ha-input>
@@ -1191,7 +1225,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                 >
                   <ha-input
                     .label=${localize(this.hass, 'component.bge.editor.line_color')}
-                    .value=${this._config.line_color || defaultLineColor}
+                    .value=${this._config.line_color ?? ''}
+                    .placeholder=${defaultLineColor}
                     .configValue=${'line_color'}
                     @change=${this._valueChanged}
                   ></ha-input>
@@ -1326,14 +1361,18 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.points_per_hour')}
             type="number"
-            .value=${String(this._config.points_per_hour ?? 1)}
+            min="1"
+            .value=${this._config.points_per_hour ?? ''}
+            .placeholder=${'1'}
             .configValue=${'points_per_hour'}
             @change=${this._valueChanged}
           ></ha-input>
           <ha-input
             .label=${localize(this.hass, 'component.bge.editor.update_interval')}
             type="number"
-            .value=${String(this._config.update_interval ?? 600)}
+            min="0"
+            .value=${this._config.update_interval ?? ''}
+            .placeholder=${'600'}
             .configValue=${'update_interval'}
             @change=${this._valueChanged}
           ></ha-input>
@@ -1399,4 +1438,10 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   static styles = css`
     ${unsafeCSS(editorStyles)}
   `;
+}
+
+// A duplicate Lovelace resource entry loads this bundle twice. An unguarded define
+// throws on the second pass and the editor would fail to open, so only register once.
+if (typeof window !== 'undefined' && !customElements.get(EDITOR_ELEMENT_NAME)) {
+  customElements.define(EDITOR_ELEMENT_NAME, BackgroundGraphEntitiesEditor);
 }

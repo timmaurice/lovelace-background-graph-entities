@@ -6,6 +6,34 @@ export const MIN_IN_H = 60;
 export const MS_IN_H = MIN_IN_H * S_IN_MIN * MS_IN_S;
 
 /**
+ * Reads a config number that may legally arrive as a string: YAML quoting is the
+ * user's choice, so `hours_to_show: "12"` is valid config. Anything unreadable
+ * as a finite number yields `undefined` so the caller applies its own default.
+ */
+export function coerceNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Config numbers that describe a size or a window are only usable above zero.
+ * The card read them as `config.value || DEFAULT`, which let a negative through
+ * - `hours_to_show: -5` opened a window that ended before it started and drew
+ * nothing at all.
+ *
+ * Coerce first, then validate: `|| DEFAULT` accepted a quoted `"12"`, so
+ * rejecting every non-`number` would silently reset existing config.
+ */
+export function positiveOr(value: number | string | undefined, fallback: number): number {
+  const parsed = coerceNumber(value);
+  return parsed !== undefined && parsed > 0 ? parsed : fallback;
+}
+
+/**
  * Downsamples historical data into evenly spaced buckets using a time-weighted average.
  *
  * Samples with a non-finite value represent `unavailable`/`unknown` periods (the
@@ -22,65 +50,68 @@ export function downsampleHistory(
     return states; // Return raw states if downsampling is disabled or no data
   }
 
-  // Create a combined list of states to calculate durations between them.
-  // The last "state" is a virtual point at the current time to cap the duration of the last real state.
-  const statesWithEndpoints = [...states, { timestamp: new Date(), value: states[states.length - 1]?.value ?? 0 }];
-
   const now = new Date();
-  const startTime = new Date(now.getTime() - hours * MS_IN_H);
+  const windowStart = now.getTime() - hours * MS_IN_H;
+  const windowEnd = now.getTime();
   const interval = MS_IN_H / pointsPerHour;
-  const numBuckets = Math.ceil((now.getTime() - startTime.getTime()) / interval);
+  const numBuckets = Math.ceil((windowEnd - windowStart) / interval);
+
+  // Accumulate per bucket in one pass over the states. Walking every state for
+  // every bucket is quadratic, which a week of dense recorder data turns into
+  // most of a second per entity.
+  const weightedSum = new Float64Array(numBuckets);
+  const validDuration = new Float64Array(numBuckets);
+  const invalidDuration = new Float64Array(numBuckets);
+
+  for (let k = 0; k < states.length; k++) {
+    const value = states[k].value;
+    // A state lasts until the next one; the last one lasts until now.
+    const segmentStart = Math.max(states[k].timestamp.getTime(), windowStart);
+    const segmentEnd = k + 1 < states.length ? states[k + 1].timestamp.getTime() : windowEnd;
+    if (segmentEnd <= segmentStart) continue;
+
+    const firstBucket = Math.floor((segmentStart - windowStart) / interval);
+    const lastBucket = Math.min(numBuckets - 1, Math.floor((segmentEnd - windowStart) / interval));
+    for (let b = Math.max(0, firstBucket); b <= lastBucket; b++) {
+      const bucketStartTime = windowStart + b * interval;
+      const duration = Math.min(segmentEnd, bucketStartTime + interval) - Math.max(segmentStart, bucketStartTime);
+      if (duration <= 0) continue;
+      // A non-finite value marks an `unavailable`/`unknown` period, which only
+      // reaches this function when `show_gaps` is enabled. Its duration is
+      // tracked separately so it can never poison the average with NaN.
+      if (Number.isFinite(value)) {
+        weightedSum[b] += value * duration;
+        validDuration[b] += duration;
+      } else {
+        invalidDuration[b] += duration;
+      }
+    }
+  }
 
   const downsampled: { timestamp: Date; value: number }[] = [];
   // The first state is guaranteed by `include_start_time_state: true` to be the value at the start of the window.
-  let lastValue = states.length > 0 ? states[0].value : 0;
+  let lastValue = states[0].value;
+  // States arrive sorted, so the carry-forward value only ever moves forward -
+  // a cursor replaces the per-bucket scan the old code did over all states.
+  let cursor = 0;
 
   for (let i = 0; i < numBuckets; i++) {
-    const bucketTimestamp = new Date(startTime.getTime() + (i + 1) * interval);
+    const bucketEndTime = windowStart + (i + 1) * interval;
     let valueForBucket: number;
 
-    const bucketStartTime = startTime.getTime() + i * interval;
-    const bucketEndTime = bucketStartTime + interval;
-    let weightedSum = 0;
-    let validDuration = 0;
-    let invalidDuration = 0;
-
-    // Iterate through all state changes to calculate their weighted contribution to this bucket.
-    for (let k = 0; k < statesWithEndpoints.length - 1; k++) {
-      const currentState = statesWithEndpoints[k];
-      const nextState = statesWithEndpoints[k + 1];
-
-      // Determine the portion of the state's duration that falls within the current bucket.
-      const start = Math.max(currentState.timestamp.getTime(), bucketStartTime);
-      const end = Math.min(nextState.timestamp.getTime(), bucketEndTime);
-
-      if (start < end) {
-        const duration = end - start;
-        // A non-finite value marks an `unavailable`/`unknown` period, which only
-        // reaches this function when `show_gaps` is enabled. Its duration is
-        // tracked separately so it can never poison the average with NaN.
-        if (Number.isFinite(currentState.value)) {
-          weightedSum += currentState.value * duration;
-          validDuration += duration;
-        } else {
-          invalidDuration += duration;
-        }
-      }
-    }
-
-    const totalDurationInBucket = validDuration + invalidDuration;
-
-    if (totalDurationInBucket > 0) {
+    if (validDuration[i] + invalidDuration[i] > 0) {
       // A bucket that spends most of its time in an invalid state becomes a gap.
       // A minority sliver of invalid time is ignored, so a single blip cannot
       // punch a hole in an otherwise continuous line. When nothing is invalid
       // this reduces to the original time-weighted average.
-      valueForBucket = invalidDuration > validDuration ? NaN : weightedSum / validDuration;
-      // Find the last actual value at or before the end of this bucket to carry forward.
-      // A NaN is carried forward on purpose: if the entity was last seen unavailable,
-      // a following empty bucket is still inside that outage. (`??` only guards
-      // null/undefined, so a NaN found here is kept, which is what we want.)
-      lastValue = states.filter((s) => s.timestamp.getTime() <= bucketEndTime).pop()?.value ?? lastValue;
+      valueForBucket = invalidDuration[i] > validDuration[i] ? NaN : weightedSum[i] / validDuration[i];
+      // Carry the last actual value at or before the end of this bucket forward.
+      // A NaN is carried forward on purpose: if the entity was last seen
+      // unavailable, a following empty bucket is still inside that outage.
+      while (cursor < states.length && states[cursor].timestamp.getTime() <= bucketEndTime) {
+        lastValue = states[cursor].value;
+        cursor++;
+      }
     } else {
       // If the bucket is empty, use the last known value.
       valueForBucket = lastValue;
@@ -88,15 +119,13 @@ export function downsampleHistory(
 
     downsampled.push({
       // Use the end of the bucket interval as the timestamp
-      timestamp: bucketTimestamp,
+      timestamp: new Date(bucketEndTime),
       value: valueForBucket,
     });
   }
 
   // Add a point at the very beginning to anchor the graph.
-  if (states.length > 0) {
-    downsampled.unshift({ timestamp: startTime, value: states[0].value });
-  }
+  downsampled.unshift({ timestamp: new Date(windowStart), value: states[0].value });
 
   return downsampled;
 }
