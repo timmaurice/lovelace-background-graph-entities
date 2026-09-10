@@ -2937,6 +2937,80 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Keyboard access', () => {
+    it('should make every row focusable and announce it as a button', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test', 'switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const rows = element.shadowRoot?.querySelectorAll('.entity-row');
+      expect(rows).toHaveLength(2);
+      rows?.forEach((row) => {
+        expect(row.getAttribute('tabindex')).toBe('0');
+        expect(row.getAttribute('role')).toBe('button');
+      });
+      expect(rows?.[0].getAttribute('aria-label')).toBe('Test Sensor');
+    });
+
+    it('should open more-info from the keyboard', async () => {
+      element.setConfig(config);
+      element.hass = hass;
+      await element.updateComplete;
+
+      const seen: string[] = [];
+      element.addEventListener('hass-more-info', (ev) => seen.push((ev as CustomEvent).detail.entityId));
+
+      const row = element.shadowRoot?.querySelector('.entity-row') as HTMLElement;
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      row.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+
+      expect(seen).toEqual(['sensor.test', 'sensor.test']);
+    });
+
+    it('should leave keys that reached a nested control alone', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        tile_style: true,
+        entities: ['switch.test'],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const seen: string[] = [];
+      element.addEventListener('hass-more-info', (ev) => seen.push((ev as CustomEvent).detail.entityId));
+
+      // The icon container is the toggle; Enter there must toggle, not open more-info.
+      const icon = element.shadowRoot?.querySelector('.icon-container') as HTMLElement;
+      icon.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+      expect(seen).toEqual([]);
+      expect(hass.callService).toHaveBeenCalledWith('homeassistant', 'toggle', { entity_id: 'switch.test' });
+    });
+
+    it('should keep an unresolvable row out of the tab order', async () => {
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ name: 'Half-filled row' } as unknown as string],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const row = element.shadowRoot?.querySelector('.entity-row.unavailable');
+      expect(row?.getAttribute('tabindex')).toBe('-1');
+    });
+  });
+
   describe('Redrawing on resize', () => {
     let observed: Element[];
     let fireResize: (() => void) | undefined;

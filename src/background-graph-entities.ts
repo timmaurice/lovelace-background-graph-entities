@@ -703,6 +703,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       : undefined;
 
     const iconStyle = iconColor ? `color: ${iconColor}` : '';
+    // The row is a click target, so it has to be reachable and operable from the
+    // keyboard too. Keys that reach a nested control (the icon toggle, the
+    // switch) are left alone - those bring their own handlers.
+    const rowLabel = entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity;
+    const handleRowKeydown = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target !== e.currentTarget) return;
+      e.preventDefault();
+      this._openEntityPopup(entityConfig.entity);
+    };
     const handleKeyboardToggle = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -777,7 +787,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
               ? `--bge-icon-color: ${iconColor};${autoIconColor ? ` --state-active-color: ${autoIconColor};` : ''}`
               : ''
           }
+          role="button"
+          tabindex="0"
+          aria-label=${rowLabel}
           @click=${() => this._openEntityPopup(entityConfig.entity)}
+          @keydown=${handleRowKeydown}
         >
           ${
             showIcon
@@ -830,7 +844,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
 
     return html`
-      <div class="entity-row ${showIcon ? '' : 'no-icon'}" @click=${() => this._openEntityPopup(entityConfig.entity)}>
+      <div
+        class="entity-row ${showIcon ? '' : 'no-icon'}"
+        role="button"
+        tabindex="0"
+        aria-label=${rowLabel}
+        @click=${() => this._openEntityPopup(entityConfig.entity)}
+        @keydown=${handleRowKeydown}
+      >
         ${
           showIcon
             ? entityConfig.icon
@@ -909,7 +930,15 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return html`
       <div
         class="entity-row unavailable ${showIcon ? '' : 'no-icon'}"
+        role=${entityConfig.entity ? 'button' : 'listitem'}
+        tabindex=${entityConfig.entity ? '0' : '-1'}
+        aria-label=${entityConfig.name || entityConfig.entity || message}
         @click=${() => entityConfig.entity && this._openEntityPopup(entityConfig.entity)}
+        @keydown=${(e: KeyboardEvent) => {
+          if (!entityConfig.entity || (e.key !== 'Enter' && e.key !== ' ')) return;
+          e.preventDefault();
+          this._openEntityPopup(entityConfig.entity);
+        }}
       >
         ${showIcon ? html`<ha-icon class="entity-icon" icon=${UNAVAILABLE_ICON}></ha-icon>` : ''}
         <div class="entity-name">

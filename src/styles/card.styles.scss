@@ -21,6 +21,14 @@
   &:last-of-type {
     margin-bottom: 0;
   }
+
+  // The row is keyboard-operable, so it needs a focus ring of its own - the
+  // default one would be drawn tight around the overflowing content.
+  &:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--primary-color, #03a9f4);
+    outline-offset: 2px;
+  }
 }
 
 .tile .entity-row {
