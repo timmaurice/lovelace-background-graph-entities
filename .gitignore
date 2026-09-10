@@ -20,3 +20,6 @@ ha-config/
 # Home Assistant driven Playwright suite
 playwright-report-ha/
 test-results-ha/
+
+# Local machine compose override (corporate CA, local paths)
+docker-compose.override.yml
