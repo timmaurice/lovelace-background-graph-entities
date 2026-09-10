@@ -2987,6 +2987,50 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('getGridOptions', () => {
+    const grid = (): Record<string, number> =>
+      (element as unknown as { getGridOptions(): Record<string, number> }).getGridOptions();
+
+    it('should describe a full-width card that may shrink to half', () => {
+      element.setConfig(config);
+      expect(grid().columns).toBe(12);
+      expect(grid().min_columns).toBe(6);
+      expect(grid().min_rows).toBe(1);
+    });
+
+    it('should grow with the number of rows', () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      const one = grid().rows;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.test', 'sensor.test', 'sensor.test', 'sensor.test', 'sensor.test', 'sensor.test'],
+      });
+      expect(grid().rows).toBeGreaterThan(one);
+    });
+
+    it('should leave room for a title', () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      const untitled = grid().rows;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'], title: 'Room' });
+      expect(grid().rows).toBeGreaterThan(untitled);
+    });
+
+    it('should ask for less height in tile style', () => {
+      const entities = Array.from({ length: 12 }, () => 'sensor.test');
+      element.setConfig({ type: 'custom:background-graph-entities', entities });
+      const standard = grid().rows;
+      element.setConfig({ type: 'custom:background-graph-entities', entities, tile_style: true });
+      expect(grid().rows).toBeLessThan(standard);
+    });
+
+    it('should never ask for less than one row before a config arrives', () => {
+      const fresh = document.createElement('background-graph-entities') as BackgroundGraphEntitiesType;
+      expect(
+        (fresh as unknown as { getGridOptions(): Record<string, number> }).getGridOptions().rows,
+      ).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe('Keyboard access', () => {
     it('should make every row focusable and announce it as a button', async () => {
       hass.states['switch.test'] = {

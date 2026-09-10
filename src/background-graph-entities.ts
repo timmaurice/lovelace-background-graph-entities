@@ -235,6 +235,26 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     return { entities: [{ entity: pick ?? '' }] };
   }
 
+  /**
+   * Sizing for sections dashboards. A row is 40px tall with an 8px gap, the
+   * content adds 16px of padding top and bottom, and a header adds 72px. Home
+   * Assistant's grid row is 56px with an 8px gap, hence the /64.
+   */
+  public getGridOptions(): Record<string, number> {
+    const rowCount = this._config?.entities?.length ?? 1;
+    const isTile = this._config?.tile_style === true;
+    const rowHeight = isTile ? 34 + 8 : 40 + 8;
+    const padding = isTile ? 20 : 32;
+    const header = this._config?.title || this._config?.average_in_title ? 72 : 0;
+    const pixels = padding + header + rowCount * rowHeight - 8;
+    return {
+      rows: Math.max(1, Math.ceil((pixels + 8) / 64)),
+      min_rows: 1,
+      columns: 12,
+      min_columns: 6,
+    };
+  }
+
   protected updated(changedProperties: Map<string | number | symbol, unknown>): void {
     if (this._config && this.hass && !this._historyFetched) {
       this._historyFetched = true; // Prevent re-fetching on every subsequent update
