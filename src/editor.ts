@@ -37,6 +37,10 @@ interface ColorPicker extends HTMLElement {
 
 const EDITOR_ELEMENT_NAME = 'background-graph-entities-editor';
 
+// Number fields whose `min` is a mode, not a bound: `update_interval: 0` means
+// "never refresh", so a below-range entry is dropped rather than snapped onto it.
+const MODE_MINIMUM_KEYS = new Set<string>(['update_interval']);
+
 type ThresholdEventTarget = HTMLElement & { value?: string };
 
 export class BackgroundGraphEntitiesEditor extends LitElement implements LovelaceCardEditor {
@@ -231,7 +235,9 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         // so a typed `-5` silently produced an empty graph.
         const min = target.getAttribute('min');
         if (min !== null && typeof value === 'number' && !isNaN(value) && value < Number(min)) {
-          value = Number(min);
+          // Snapping onto the minimum is only safe where it is a bound; where it
+          // is a mode, a typo would silently switch the card off for good.
+          value = MODE_MINIMUM_KEYS.has(String(configValue)) ? undefined : Number(min);
         }
       }
 

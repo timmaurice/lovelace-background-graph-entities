@@ -341,9 +341,12 @@ describe('BackgroundGraphEntitiesEditor', () => {
       expect(lastConfig().update_interval).toBe(0);
     });
 
-    it('clamps a negative update interval to off', () => {
+    it('does not answer a negative update interval by switching refreshing off', () => {
+      // 0 is not this field's floor, it is its "never refresh" mode. Clamping
+      // onto it turned a typo into a permanently stale card - and disagreed with
+      // the card, which reads -30 as the 600s default.
       change(field('update_interval'), '-30');
-      expect(lastConfig().update_interval).toBe(0);
+      expect(lastConfig()).not.toHaveProperty('update_interval');
     });
 
     it('keeps a value the user legitimately typed', () => {
