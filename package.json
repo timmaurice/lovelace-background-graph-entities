@@ -24,6 +24,7 @@
     "demo": "serve -l 3000",
     "test": "NODE_ENV=production vitest run",
     "test:e2e": "docker compose -f docker-compose.e2e.yml up --build --exit-code-from playwright",
+    "test:e2e:ha": "playwright test --config playwright.ha.config.ts",
     "watch": "rollup -c -w"
   },
   "devDependencies": {
