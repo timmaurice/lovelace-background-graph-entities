@@ -2392,6 +2392,57 @@ describe('BackgroundGraphEntities', () => {
       warnSpy.mockRestore();
     });
 
+    it('should give duplicate rows their own gradient', async () => {
+      // Ids are document-wide, so a shared id makes the second row paint itself
+      // with the first row's thresholds.
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#ff0000' },
+              { value: 100, color: '#00ff00' },
+            ],
+          },
+          {
+            entity: 'sensor.test',
+            name: 'Same entity again',
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 0, color: '#0000ff' },
+              { value: 100, color: '#ffff00' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const gradients = element.shadowRoot?.querySelectorAll('defs > *') as unknown as SVGGradientElement[];
+      expect(gradients).toHaveLength(2);
+      const ids = [...gradients].map((gradient) => gradient.getAttribute('id')!);
+      expect(new Set(ids).size).toBe(2);
+
+      const paths = element.shadowRoot?.querySelectorAll('path.graph-path');
+      expect(paths).toHaveLength(2);
+      expect(paths?.[0].getAttribute('stroke')).toBe(`url(#${ids[0]})`);
+      expect(paths?.[1].getAttribute('stroke')).toBe(`url(#${ids[1]})`);
+
+      const stopColors = (gradient: Element): (string | null)[] =>
+        [...gradient.children].map((stop) => stop.getAttribute('stop-color'));
+      const firstStops = stopColors(gradients[0]);
+      const secondStops = stopColors(gradients[1]);
+      expect(firstStops).toEqual(['#ff0000', '#00ff00']);
+      expect(secondStops).toEqual(['#0000ff', '#ffff00']);
+    });
+
     it('should apply each duplicate row its own transform to the graph', async () => {
       (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
 

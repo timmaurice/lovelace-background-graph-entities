@@ -944,7 +944,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         ? entityConfig.line_opacity
         : (this._config?.line_opacity ?? DEFAULT_LINE_OPACITY);
 
-    const gradientId = `bge-gradient-${container.dataset.entityId?.replace('.', '_')}`;
+    // The row index is part of the id: ids are document-wide, so two rows on the
+    // same entity produced one gradient and the second row silently painted
+    // itself with the first row's colours.
+    const gradientId = `bge-gradient-${container.dataset.entityIndex}-${container.dataset.entityId?.replace(/\./g, '_')}`;
     const strokeColor = this._setupGradient(svg, yScale, gradientId, entityConfig);
 
     const lineGenerator = d3Line<{ timestamp: Date; value: number }>()
