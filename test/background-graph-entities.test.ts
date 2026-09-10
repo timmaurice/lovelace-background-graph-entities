@@ -24,6 +24,19 @@ vi.mock('d3-scale', async () => {
   return { ...originalModule, scaleLinear: vi.fn(originalModule.scaleLinear) };
 });
 
+/**
+ * Drains the rAF-driven render chain under fake timers.
+ *
+ * Not `runAllTimersAsync`: the card now arms a recurring history refresh, so the
+ * timer queue never empties and that helper aborts as an infinite loop. The
+ * render path only ever hops a handful of animation frames (mocked here as
+ * `setTimeout(cb, 0)`), so a short bounded advance is enough - and it keeps the
+ * refresh interval out of the tests that only care about drawing.
+ */
+async function flushFrames(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(100);
+}
+
 describe('BackgroundGraphEntities', () => {
   let element: BackgroundGraphEntitiesType;
   let hass: HomeAssistant;
@@ -284,7 +297,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       // Wait for the requestAnimationFrame in `updated()` to fire and render the D3 graph.
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const graphContainer = element.shadowRoot?.querySelector('.graph-container');
       const svg = graphContainer?.querySelector('svg');
@@ -370,6 +383,52 @@ describe('BackgroundGraphEntities', () => {
       expect(values).toHaveLength(2);
       expect(values?.[0].textContent?.trim()).toBe('14 min');
       expect(values?.[1].textContent?.trim()).toBe('1h 15min');
+    });
+  });
+
+  describe('History refresh interval', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should refresh history on the documented default interval', async () => {
+      element.hass = hass;
+      element.setConfig(config);
+      await element.updateComplete;
+      await element.updateComplete;
+      const callsAfterFirstFetch = (hass.callWS as Mock).mock.calls.length;
+      expect(callsAfterFirstFetch).toBeGreaterThan(0);
+
+      // README documents `update_interval: 600`; without a default the card
+      // fetched once and then froze forever.
+      await vi.advanceTimersByTimeAsync(600 * 1000 + 10);
+      expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(callsAfterFirstFetch);
+    });
+
+    it('should honor an explicit update_interval', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, update_interval: 5 });
+      await element.updateComplete;
+      await element.updateComplete;
+      const before = (hass.callWS as Mock).mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(5 * 1000 + 10);
+      expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(before);
+    });
+
+    it('should never refresh when update_interval is 0', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, update_interval: 0 });
+      await element.updateComplete;
+      await element.updateComplete;
+      const before = (hass.callWS as Mock).mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+      expect((hass.callWS as Mock).mock.calls.length).toBe(before);
     });
   });
 
@@ -556,7 +615,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, line_glow: true, hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const svg = element.shadowRoot?.querySelector('svg');
       expect(svg, 'SVG element should exist').not.toBeNull();
@@ -574,7 +633,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const svg = element.shadowRoot?.querySelector('svg');
       expect(svg, 'SVG element should exist').not.toBeNull();
@@ -590,7 +649,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const path = element.shadowRoot?.querySelector('path');
       expect(path, 'Path element should exist').not.toBeNull();
@@ -605,7 +664,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, curve: 'linear', hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const path = element.shadowRoot?.querySelector('path');
       expect(path, 'Path element should exist').not.toBeNull();
@@ -621,7 +680,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, curve: 'step', hours_to_show: 2, points_per_hour: 1 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const path = element.shadowRoot?.querySelector('path');
       expect(path, 'Path element should exist').not.toBeNull();
@@ -1081,7 +1140,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig(config);
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const yDomain = [10, 20];
       const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR;
@@ -1096,7 +1155,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, graph_min: 0, graph_max: 50 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       expect(scaleLinear).toHaveBeenCalled();
       const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
@@ -1107,7 +1166,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, graph_min: 0 });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       const yDomain = [0, 20]; // min is overridden
       const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR;
@@ -1134,7 +1193,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       expect(scaleLinear).toHaveBeenCalled();
       const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
@@ -1149,7 +1208,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       // The domain should be exactly [0, 50], not [0 - padding, 50 + padding]
       const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
@@ -1360,7 +1419,7 @@ describe('BackgroundGraphEntities', () => {
       element.setConfig({ ...config, ...gapConfig, ...extraConfig });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
       return element.shadowRoot?.querySelector('.graph-path') ?? null;
     };
@@ -1428,7 +1487,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Max of the finite raw samples (10, 12, 20, 22) — the gap markers are ignored.
@@ -1486,7 +1545,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1509,7 +1568,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1544,7 +1603,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1578,7 +1637,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1611,7 +1670,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -1656,7 +1715,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1675,7 +1734,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1694,7 +1753,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Downsampled history [30, 65, 55] → mean = 50.
@@ -1714,7 +1773,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Downsampled history [30, 65, 55] → sorted [30, 55, 65] → median = 55.
@@ -1734,7 +1793,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const label = element.shadowRoot?.querySelector('.value-label');
@@ -1765,7 +1824,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1783,7 +1842,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1831,7 +1890,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1875,7 +1934,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const primary = element.shadowRoot?.querySelector('.primary-value');
@@ -1895,7 +1954,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Precision comes from the raw state "12.5" (1 decimal), not the transformed number.
@@ -1915,7 +1974,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Raw history [30, 100, 10] × 2 → max 200.
@@ -1935,7 +1994,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Raw [30, 100, 10] → [-30, -100, -10]: the max is -10, not the
@@ -1956,7 +2015,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       // Downsampled [30, 65, 55] × 8 → extent [240, 520], 10% padding → [212, 548].
       expect(scaleLinear).toHaveBeenCalled();
@@ -1985,7 +2044,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       // Latest downsampled value 60 × 2 = 120 ≥ threshold 100 → pure red.
@@ -2219,7 +2278,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
 
       // The last-rendered graph belongs to the second row; with find-by-id it
       // would wrongly use the first (untransformed) config → domain [9.5, 68.5].
@@ -2411,7 +2470,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2441,7 +2500,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2471,7 +2530,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2501,7 +2560,7 @@ describe('BackgroundGraphEntities', () => {
       });
       await element.updateComplete;
       await element.updateComplete;
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
@@ -2689,7 +2748,7 @@ describe('BackgroundGraphEntities', () => {
 
       await element.updateComplete;
       await element.updateComplete; // wait for history fetch
-      await vi.runAllTimersAsync();
+      await flushFrames();
       await element.updateComplete;
 
       const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>

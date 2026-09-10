@@ -22,6 +22,9 @@ const DEFAULT_HOURS_TO_SHOW = 24;
 const DEFAULT_LINE_WIDTH = 3;
 const DEFAULT_LINE_OPACITY = 0.2;
 const DEFAULT_POINTS_PER_HOUR = 1;
+// Matches the default the README documents. Without it the card fetched history
+// exactly once and then never again, so an unconfigured card froze forever.
+const DEFAULT_UPDATE_INTERVAL = 600;
 const DEFAULT_CURVE = 'spline';
 
 // D3/Rendering constants
@@ -124,8 +127,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   private _setupUpdateInterval(): void {
     if (this._timerId) clearInterval(this._timerId);
     if (!this._config) return;
-    const interval = this._config.update_interval;
-    if (interval) this._timerId = window.setInterval(() => this._fetchAndStoreAllHistory(), interval * MS_IN_S);
+    // `?? ` not `||`: an explicit 0 is the documented way to switch refreshing off.
+    const interval = this._config.update_interval ?? DEFAULT_UPDATE_INTERVAL;
+    if (interval > 0) this._timerId = window.setInterval(() => this._fetchAndStoreAllHistory(), interval * MS_IN_S);
   }
 
   public static async getConfigElement(): Promise<LovelaceCardEditor> {
