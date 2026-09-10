@@ -386,6 +386,63 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('History fetching', () => {
+    const historyCalls = () =>
+      (hass.callWS as Mock).mock.calls.filter(([message]) => message?.type === 'history/history_during_period') as [
+        { entity_ids: string[] },
+      ][];
+
+    it('should fetch every row in a single websocket call', async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 12; i++) {
+        const id = `sensor.row_${i}`;
+        ids.push(id);
+        hass.states[id] = { entity_id: id, state: String(i), attributes: {} };
+      }
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ids });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      // One request per row is what made a 60-row card issue 60 calls.
+      expect(historyCalls()).toHaveLength(1);
+      expect(historyCalls()[0][0].entity_ids).toEqual(ids);
+    });
+
+    it('should ask for a shared series only once', async () => {
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [
+          { entity: 'sensor.test' },
+          { entity: 'sensor.test', name: 'Same entity, second row' },
+          { entity: 'sensor.other', graph_entity: 'sensor.test' },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(historyCalls()).toHaveLength(1);
+      expect(historyCalls()[0][0].entity_ids).toEqual(['sensor.test']);
+    });
+
+    it('should still keep per-entity history apart in one response', async () => {
+      hass.states['sensor.second'] = { entity_id: 'sensor.second', state: '7', attributes: {} };
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [{ lu: 1_700_000_000, s: '1' }],
+        'sensor.second': [{ lu: 1_700_000_000, s: '2' }],
+      });
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test', 'sensor.second'] });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const history = (element as unknown as { _history: Map<string, { raw: { value: number }[] }> })._history;
+      expect(history.get('sensor.test')?.raw[0].value).toBe(1);
+      expect(history.get('sensor.second')?.raw[0].value).toBe(2);
+    });
+  });
+
   describe('History refresh interval', () => {
     beforeEach(() => {
       vi.useFakeTimers();

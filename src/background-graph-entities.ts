@@ -59,6 +59,13 @@ declare global {
   }
 }
 
+interface HistorySeries {
+  raw: { timestamp: Date; value: number }[];
+  downsampled: { timestamp: Date; value: number }[];
+}
+
+type HistoryMap = Map<string, HistorySeries>;
+
 interface LovelaceCardHelpers {
   createCardElement(config: LovelaceCardConfig): Promise<LovelaceCard>;
 }
@@ -77,13 +84,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   @property({ type: Boolean, reflect: true }) public editMode = false;
   @state() private _config!: BackgroundGraphEntitiesConfig;
   @state() private _entities: EntityConfig[] = [];
-  @state() private _history: Map<
-    string,
-    {
-      raw: { timestamp: Date; value: number }[];
-      downsampled: { timestamp: Date; value: number }[];
-    }
-  > = new Map();
+  @state() private _history: HistoryMap = new Map();
   private _historyFetched = false;
   private _timerId?: number;
   // Compiled value_transform functions, memoized per entity+expression so config
@@ -315,12 +316,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   private _pickHistoryValue(
-    historyData:
-      | {
-          raw: { value: number }[];
-          downsampled: { value: number }[];
-        }
-      | undefined,
+    historyData: HistorySeries | undefined,
     source: 'latest' | 'max' | 'min' | 'avg' | 'median',
     transform?: ValueTransform,
   ): number | undefined {
@@ -996,43 +992,20 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (this._history.size > 0) this._history = new Map();
       return;
     }
-    const newHistory = new Map<
-      string,
-      {
-        raw: { timestamp: Date; value: number }[];
-        downsampled: { timestamp: Date; value: number }[];
-      } | null
-    >();
-    const historyPromises = this._entities.map(async (entityConf) => {
-      const entityId = entityConf.graph_entity || entityConf.entity;
-      const history = await this._fetchHistory(entityId, entityConf.entity);
-      newHistory.set(entityId, history);
-    });
-    await Promise.all(historyPromises);
-    // Filter out null histories
-    this._history = new Map(
-      [...newHistory.entries()].filter(([, value]) => value !== null) as [
-        string,
-        {
-          raw: { timestamp: Date; value: number }[];
-          downsampled: { timestamp: Date; value: number }[];
-        },
-      ][],
-    );
+    // One request for every row the card draws. The same entity can back several
+    // rows (and `graph_entity` can point rows at a shared series), so the ids are
+    // de-duplicated first: a 60-row card used to issue 60 websocket calls for
+    // what the recorder answers in one.
+    const entityIds = [...new Set(this._entities.map((conf) => conf.graph_entity || conf.entity).filter(Boolean))];
+    this._history = await this._fetchHistory(entityIds);
   }
 
-  private async _fetchHistory(
-    entityId: string,
-    mainEntityIdForLogging?: string,
-  ): Promise<{
-    raw: { timestamp: Date; value: number }[];
-    downsampled: { timestamp: Date; value: number }[];
-  } | null> {
-    if (!this.hass?.callWS) return null;
+  private async _fetchHistory(entityIds: string[]): Promise<HistoryMap> {
+    const result: HistoryMap = new Map();
+    if (!this.hass?.callWS || entityIds.length === 0) return result;
 
     const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
     const pointsPerHour = this._config?.points_per_hour || DEFAULT_POINTS_PER_HOUR;
-
     const start = new Date();
     start.setHours(start.getHours() - hoursToShow);
 
@@ -1043,35 +1016,39 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         type: 'history/history_during_period',
         start_time: start.toISOString(),
         end_time: new Date().toISOString(),
-        entity_ids: [entityId],
+        entity_ids: entityIds,
         minimal_response: true,
         no_attributes: true,
         include_start_time_state: true,
       });
 
-      const states = history[entityId];
-      if (!states) {
-        return { raw: [], downsampled: [] };
-      }
-
       // With `show_gaps` enabled, non-numeric states (`unavailable`/`unknown`) are
       // kept as NaN so the graph can render a break for them. Otherwise they are
       // dropped, which makes the line carry the last known value across the outage.
       const showGaps = this._config?.show_gaps === true;
-      const mappedStates = states.map((s) => {
-        let value: number;
-        if (s.s === 'on') value = 1;
-        else if (s.s === 'off') value = 0;
-        else value = Number(s.s);
-        return { timestamp: new Date(s.lu * MS_IN_S), value };
-      });
-      const finalStates = showGaps ? mappedStates : mappedStates.filter((s) => !isNaN(s.value));
-      const downsampled = downsampleHistory(finalStates, hoursToShow, pointsPerHour);
-      return { raw: finalStates, downsampled };
+      for (const entityId of entityIds) {
+        const states = history?.[entityId];
+        if (!states) {
+          result.set(entityId, { raw: [], downsampled: [] });
+          continue;
+        }
+        const mappedStates = states.map((s) => {
+          let value: number;
+          if (s.s === 'on') value = 1;
+          else if (s.s === 'off') value = 0;
+          else value = Number(s.s);
+          return { timestamp: new Date(s.lu * MS_IN_S), value };
+        });
+        const finalStates = showGaps ? mappedStates : mappedStates.filter((s) => !isNaN(s.value));
+        result.set(entityId, {
+          raw: finalStates,
+          downsampled: downsampleHistory(finalStates, hoursToShow, pointsPerHour),
+        });
+      }
     } catch (err) {
-      console.error(`Error fetching history for ${mainEntityIdForLogging || entityId} (using ${entityId}):`, err);
-      return null;
+      console.error(`Error fetching history for ${entityIds.join(', ')}:`, err);
     }
+    return result;
   }
 
   private _getAverageTitleSuffix(): string {
