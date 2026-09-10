@@ -3699,6 +3699,79 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe("The card's own unavailable/unknown wording", () => {
+    /**
+     * `hass.localize` returns an empty string for a key it cannot resolve, which
+     * is what the frontend does until the state translations have loaded. The
+     * core keys are preferred whenever they resolve - they are the wording users
+     * already know - and only then does the card fall back to its own bundle.
+     */
+    const withoutStateTranslations = (language: string): HomeAssistant => ({
+      ...hass,
+      language,
+      localize: () => '',
+    });
+
+    it('names an unavailable state in the user language when HA cannot', async () => {
+      hass.states['sensor.test'] = {
+        entity_id: 'sensor.test',
+        state: 'unavailable',
+        attributes: { friendly_name: 'Test Sensor' },
+      };
+      element.setConfig(config);
+      element.hass = withoutStateTranslations('de');
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('Nicht verfügbar');
+    });
+
+    it('names an unknown state in the user language when HA cannot', async () => {
+      hass.states['sensor.test'] = {
+        entity_id: 'sensor.test',
+        state: 'unknown',
+        attributes: { friendly_name: 'Test Sensor' },
+      };
+      element.setConfig(config);
+      element.hass = withoutStateTranslations('fr');
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('Inconnu');
+    });
+
+    it('names a missing entity in the user language when HA cannot', async () => {
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.missing'] });
+      element.hass = withoutStateTranslations('de');
+      await element.updateComplete;
+
+      const row = element.shadowRoot?.querySelector('.entity-row.unavailable');
+      expect(row?.querySelector('.entity-value')?.textContent?.trim()).toBe('Nicht verfügbar');
+    });
+
+    it('names a missing companion entity in the user language when HA cannot', async () => {
+      element.setConfig({
+        ...config,
+        entities: [{ entity: 'sensor.test', extra_value_entity: 'sensor.missing' }],
+      });
+      element.hass = withoutStateTranslations('fr');
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.extra-value')?.textContent?.trim()).toBe('Indisponible');
+    });
+
+    it("still prefers HA's own wording whenever it resolves", async () => {
+      hass.states['sensor.test'] = {
+        entity_id: 'sensor.test',
+        state: 'unavailable',
+        attributes: { friendly_name: 'Test Sensor' },
+      };
+      element.setConfig(config);
+      element.hass = { ...hass, language: 'de', localize: () => 'Nicht bereit' };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('Nicht bereit');
+    });
+  });
+
   describe('Quoted config numbers', () => {
     const windowCalls = () =>
       (hass.callWS as Mock).mock.calls.filter(([message]) => message?.type === 'history/history_during_period') as [
