@@ -319,6 +319,9 @@ describe('BackgroundGraphEntitiesEditor', () => {
     it('stops the spinners at a usable minimum', () => {
       // Bare `type="number"` fields let a user spin down past zero, and the card
       // read `hours_to_show || DEFAULT`, so -5 drew an empty graph.
+      // This reads the host attribute only; that it reaches the control the user
+      // spins is covered in editor-demo-fields.test.ts, where the fields are real
+      // elements instead of jsdom's unknown ones.
       expect(field('hours_to_show').getAttribute('min')).toBe('1');
       expect(field('line_width').getAttribute('min')).toBe('1');
       expect(field('points_per_hour').getAttribute('min')).toBe('1');
@@ -360,9 +363,9 @@ describe('BackgroundGraphEntitiesEditor', () => {
     });
 
     it('stores a global number field as a number, not as the raw input string', () => {
-      // Lit renders `type="number"` as an attribute, not as the property HA's
-      // own field exposes. Reading only the property stored `"12"`, and the card
-      // gates on `typeof === 'number'`.
+      // A guard, not a fix test: the global handler already reads both the `type`
+      // property and the attribute. It is the twin of the per-entity case below,
+      // which did not, and it is kept so the two cannot drift apart again.
       change(field('hours_to_show'), '12');
       expect(typeof lastConfig().hours_to_show).toBe('number');
     });

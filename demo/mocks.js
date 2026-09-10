@@ -294,6 +294,13 @@ class HaTextfield extends HTMLElement {
       ${this._helper ? `<div class="helper">${this._helper}</div>` : ''}
     `;
     const input = this.shadowRoot.querySelector('input');
+    // The editor writes `min` on the host, and HA's own field forwards it to the
+    // control it wraps. Without this the demo's spinners happily count past the
+    // minimum into the negative, which the card then has to reject.
+    for (const name of ['min', 'max', 'step']) {
+      const value = this.getAttribute(name);
+      if (value !== null) input.setAttribute(name, value);
+    }
     // Assigned as properties, not interpolated into the markup: a value_transform
     // expression may contain quotes, which would break out of the attribute.
     input.value = this._value ?? '';
