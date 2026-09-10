@@ -6,13 +6,31 @@ export const MIN_IN_H = 60;
 export const MS_IN_H = MIN_IN_H * S_IN_MIN * MS_IN_S;
 
 /**
+ * Reads a config number that may legally arrive as a string: YAML quoting is the
+ * user's choice, so `hours_to_show: "12"` is valid config. Anything unreadable
+ * as a finite number yields `undefined` so the caller applies its own default.
+ */
+export function coerceNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+/**
  * Config numbers that describe a size or a window are only usable above zero.
  * The card read them as `config.value || DEFAULT`, which let a negative through
  * - `hours_to_show: -5` opened a window that ended before it started and drew
  * nothing at all.
+ *
+ * Coerce first, then validate: `|| DEFAULT` accepted a quoted `"12"`, so
+ * rejecting every non-`number` would silently reset existing config.
  */
-export function positiveOr(value: number | undefined, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+export function positiveOr(value: number | string | undefined, fallback: number): number {
+  const parsed = coerceNumber(value);
+  return parsed !== undefined && parsed > 0 ? parsed : fallback;
 }
 
 /**

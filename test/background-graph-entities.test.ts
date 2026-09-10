@@ -1313,6 +1313,43 @@ describe('BackgroundGraphEntities', () => {
       expect(lastCall.domain()).toEqual(expectedDomain);
     });
 
+    it('honours bounds that YAML quoted into strings', async () => {
+      // `graph_min: "0"` is legal YAML, and a bare `typeof === 'number'` gate
+      // dropped it silently - the graph just kept its automatic bounds.
+      element.setConfig({
+        ...config,
+        graph_min: '0' as unknown as number,
+        graph_max: '50' as unknown as number,
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([0, 50]);
+    });
+
+    it('honours a per-entity bound the visual editor stored as a string', async () => {
+      // What the per-entity handler wrote before it read the `type` attribute.
+      element.setConfig({
+        ...config,
+        entities: [
+          {
+            entity: 'sensor.test',
+            overwrite_graph_appearance: true,
+            graph_min: '5' as unknown as number,
+            graph_max: '25' as unknown as number,
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const lastCall = vi.mocked(scaleLinear).mock.results.slice(-1)[0].value;
+      expect(lastCall.domain()).toEqual([5, 25]);
+    });
+
     it('should use per-entity bounds which override global bounds', async () => {
       element.setConfig({
         ...config,
@@ -3605,6 +3642,8 @@ describe('BackgroundGraphEntities', () => {
       expect(requestedHours()).toBeCloseTo(24, 5);
     });
 
+    // A guard, not a fix test: `0 || DEFAULT` already fell back. It is kept so a
+    // future rewrite of the coercion cannot lose the documented zero case.
     it('falls back to the default when hours_to_show is zero', async () => {
       element.hass = hass;
       element.setConfig({ ...config, hours_to_show: 0 });
@@ -3654,6 +3693,129 @@ describe('BackgroundGraphEntities', () => {
         // refreshing off just as effectively as the documented 0.
         await vi.advanceTimersByTimeAsync(600 * 1000 + 10);
         expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('Quoted config numbers', () => {
+    const windowCalls = () =>
+      (hass.callWS as Mock).mock.calls.filter(([message]) => message?.type === 'history/history_during_period') as [
+        { start_time: string; end_time: string },
+      ][];
+
+    const requestedHours = (): number => {
+      const [message] = windowCalls()[0];
+      return (new Date(message.end_time).getTime() - new Date(message.start_time).getTime()) / 3_600_000;
+    };
+
+    /**
+     * Quoting a number in YAML is legal and common, and `config.value || DEFAULT`
+     * accepted it by coincidence. A `typeof value === 'number'` guard would have
+     * reset every such config to the defaults on upgrade, so these numbers are
+     * coerced before they are validated.
+     */
+    it('reads a quoted hours_to_show as the window it says', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: '12' as unknown as number });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      expect(requestedHours()).toBeCloseTo(12, 5);
+    });
+
+    it('reads a quoted line_width as that stroke width', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2023-01-01T12:00:00Z'));
+        (hass.callWS as Mock).mockResolvedValue({
+          'sensor.test': [
+            { lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '5' },
+            { lu: new Date('2023-01-01T11:00:00Z').getTime() / 1000, s: '15' },
+          ],
+        });
+        element.hass = hass;
+        element.setConfig({
+          ...config,
+          line_width: '1' as unknown as number,
+          hours_to_show: 2,
+          points_per_hour: 1,
+        });
+        await element.updateComplete;
+        await element.updateComplete;
+        await flushFrames();
+
+        expect(element.shadowRoot?.querySelector('.graph-path')?.getAttribute('stroke-width')).toBe('1');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reads a quoted points_per_hour as that resolution', async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2023-01-01T12:00:00Z'));
+        (hass.callWS as Mock).mockResolvedValue({
+          'sensor.test': [{ lu: new Date('2023-01-01T10:00:00Z').getTime() / 1000, s: '5' }],
+        });
+
+        /** The drawn path for one points_per_hour value, on its own card. */
+        const graphPath = async (pointsPerHour: unknown): Promise<string> => {
+          const card = document.createElement('background-graph-entities') as BackgroundGraphEntitiesType;
+          document.body.appendChild(card);
+          card.hass = hass;
+          card.setConfig({ ...config, hours_to_show: 1, points_per_hour: pointsPerHour as number });
+          await card.updateComplete;
+          await card.updateComplete;
+          await flushFrames();
+          const drawn = card.shadowRoot?.querySelector('.graph-path')?.getAttribute('d') ?? '';
+          card.remove();
+          return drawn;
+        };
+
+        /**
+         * How many curve segments the path is drawn from - one per downsampled
+         * point. The coordinates themselves drift by a fraction of a pixel
+         * between renders because the window ends at "now".
+         */
+        const segments = (drawn: string): number => (drawn.match(/C/g) ?? []).length;
+
+        // A discarded string collapsed the resolution to the default of 1.
+        expect(segments(await graphPath('6'))).toBe(segments(await graphPath(6)));
+        expect(segments(await graphPath('6'))).toBeGreaterThan(segments(await graphPath(undefined)));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reads a quoted update_interval as that interval', async () => {
+      vi.useFakeTimers();
+      try {
+        element.hass = hass;
+        element.setConfig({ ...config, update_interval: '12' as unknown as number });
+        await element.updateComplete;
+        await element.updateComplete;
+        const before = (hass.callWS as Mock).mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(12 * 1000 + 10);
+        expect((hass.callWS as Mock).mock.calls.length).toBeGreaterThan(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('still switches refreshing off for a quoted zero', async () => {
+      vi.useFakeTimers();
+      try {
+        element.hass = hass;
+        element.setConfig({ ...config, update_interval: '0' as unknown as number });
+        await element.updateComplete;
+        await element.updateComplete;
+        const before = (hass.callWS as Mock).mock.calls.length;
+
+        await vi.advanceTimersByTimeAsync(600 * 1000 + 10);
+        expect((hass.callWS as Mock).mock.calls.length).toBe(before);
       } finally {
         vi.useRealTimers();
       }

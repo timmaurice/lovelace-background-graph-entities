@@ -20,6 +20,7 @@ import {
   formatNumber,
   MS_IN_H,
   MS_IN_S,
+  coerceNumber,
   positiveOr,
   S_IN_MIN,
   ValueTransform,
@@ -198,7 +199,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     if (!this._config) return;
     // An explicit 0 is the documented way to switch refreshing off; anything
     // negative is not a shorter interval but a typo, so it falls back instead.
-    const configured = this._config.update_interval;
+    // A quoted YAML `"0"` means the same as a bare `0`, so coerce before both.
+    const configured = coerceNumber(this._config.update_interval);
     const interval = configured === 0 ? 0 : positiveOr(configured, DEFAULT_UPDATE_INTERVAL);
     if (interval > 0) this._timerId = window.setInterval(() => this._fetchAndStoreAllHistory(), interval * MS_IN_S);
   }
@@ -1086,8 +1088,12 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         ? entityConfig.graph_max
         : this._config.graph_max;
 
-    if (typeof graphMin === 'number') yDomain[0] = graphMin;
-    if (typeof graphMax === 'number') yDomain[1] = graphMax;
+    // Both bounds may legally be quoted in YAML, and a bare `typeof === 'number'`
+    // gate dropped such a bound without a word.
+    const graphMinNum = coerceNumber(graphMin);
+    const graphMaxNum = coerceNumber(graphMax);
+    if (graphMinNum !== undefined) yDomain[0] = graphMinNum;
+    if (graphMaxNum !== undefined) yDomain[1] = graphMaxNum;
 
     if (yDomain[0] === yDomain[1]) {
       yDomain[0] -= 1;
@@ -1095,8 +1101,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     }
 
     const yPadding = (yDomain[1] - yDomain[0]) * Y_AXIS_PADDING_FACTOR; // Use padding only if bounds are not fixed
-    if (typeof graphMin !== 'number') yDomain[0] -= yPadding;
-    if (typeof graphMax !== 'number') yDomain[1] += yPadding;
+    if (graphMinNum === undefined) yDomain[0] -= yPadding;
+    if (graphMaxNum === undefined) yDomain[1] += yPadding;
 
     const xScale = scaleTime().domain(xDomain).range([0, width]);
     const yScale = scaleLinear().domain(yDomain).range([height, 0]);
