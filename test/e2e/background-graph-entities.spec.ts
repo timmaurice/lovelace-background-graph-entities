@@ -207,7 +207,8 @@ test.describe('Background Graph Entities', () => {
     // Verify that a linear gradient was generated for the graph stroke
     const graphPath = cardElement.locator('.graph-path');
     const strokeAttr = await graphPath.getAttribute('stroke');
-    expect(strokeAttr).toContain('url(#bge-gradient-sensor_bedroom)');
+    // The row index is part of the id so two rows on one entity get their own gradient.
+    expect(strokeAttr).toContain('url(#bge-gradient-0-sensor_bedroom)');
 
     const gradient = cardElement.locator('linearGradient');
     await expect(gradient).toBeAttached();
@@ -357,6 +358,47 @@ test.describe('Background Graph Entities', () => {
     await page.screenshot({
       path: 'test/e2e/screenshots/8_tile_extra_value.png',
     });
+  });
+
+  test('10. Long Names Do Not Overlap The Value', async ({ page }) => {
+    await setupCard(page, {
+      title: 'Long Names',
+      entities: [
+        {
+          entity: 'sensor.bedroom',
+          name: 'Ground floor guest bedroom window sensor temperature reading',
+        },
+        {
+          entity: 'switch.ac',
+          name: 'Ground floor guest bedroom air conditioning unit main switch',
+        },
+      ],
+    });
+
+    const cardElement = page.locator('background-graph-entities');
+    await expect(cardElement).toBeVisible();
+
+    const rows = cardElement.locator('.entity-row');
+    // The container is 400px wide - the width the overlap was reported at.
+    const cardBox = (await cardElement.locator('ha-card').boundingBox())!;
+    expect(cardBox.width).toBeLessThanOrEqual(400);
+    for (const i of [0, 1]) {
+      const nameBox = (await rows.nth(i).locator('.entity-name').boundingBox())!;
+      const valueBox = (await rows.nth(i).locator('.entity-value').boundingBox())!;
+      expect(nameBox.x + nameBox.width).toBeLessThanOrEqual(valueBox.x + 1);
+      expect(valueBox.x + valueBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
+    }
+
+    // The name is what gives way, and it gives way by truncating on one line
+    // rather than wrapping across the value and the graph.
+    await expect(rows.nth(0).locator('.name-text')).toHaveCSS('text-overflow', 'ellipsis');
+    await expect(rows.nth(0).locator('.name-text')).toHaveCSS('white-space', 'nowrap');
+    const truncated = await rows
+      .nth(0)
+      .locator('.name-text')
+      .evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect(truncated).toBe(true);
+    await expect(rows.nth(0).locator('.primary-value')).toHaveText('25.54 °C');
   });
 
   test('9. Value Transform & Unit Override', async ({ page }) => {

@@ -813,7 +813,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           }
           <div class="entity-info">
             <div class="entity-name">
-              ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
+              <span class="name-text"
+                >${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}</span
+              >
             </div>
             <div class="entity-value">
               <span class="primary-value">${displayValue}</span>
@@ -843,7 +845,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
             : ''
         }
         <div class="entity-name">
-          ${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}
+          <span class="name-text"
+            >${entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity}</span
+          >
           ${
             isToggleable && !isTileStyle && secondaryDisplayValue
               ? html`<span class="secondary-value-inline">${secondaryDisplayValue}</span>`
@@ -908,7 +912,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         @click=${() => entityConfig.entity && this._openEntityPopup(entityConfig.entity)}
       >
         ${showIcon ? html`<ha-icon class="entity-icon" icon=${UNAVAILABLE_ICON}></ha-icon>` : ''}
-        <div class="entity-name">${entityConfig.name || entityConfig.entity || ''}</div>
+        <div class="entity-name">
+          <span class="name-text">${entityConfig.name || entityConfig.entity || ''}</span>
+        </div>
         ${
           // A row with no entity id has nothing to graph, and an empty
           // `data-entity-id` would send the renderer looking for a config that

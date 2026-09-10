@@ -31,6 +31,10 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    // Same reason as .entity-name: let the column shrink so the text can
+    // ellipsize instead of running past the row.
+    min-width: 0;
+    overflow: hidden;
   }
 
   .entity-value {
@@ -39,6 +43,10 @@
     // Overrides the stacked column used on standard rows: a tile row is 34px and already
     // spends a line on the entity name, so companion values must stay on one line here.
     flex-direction: row;
+    // The standard row keeps the value clear of the name; a tile row stacks
+    // them, so it needs neither the gap nor the shrink guard.
+    flex-shrink: 1;
+    padding-left: 0;
     font-size: var(--ha-font-size-s);
     font-weight: var(--ha-font-weight-normal);
     gap: 4px;
@@ -98,17 +106,31 @@
   align-items: flex-start;
   display: flex;
   flex-direction: column;
+  // A flex item refuses to shrink below its content by default, so a long name
+  // pushed the value column out of the card and the two overlapped at 400px.
+  min-width: 0;
   z-index: 1;
+
+  // The name and the inline companions each truncate on their own line.
+  > * {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .entity-value {
   align-items: flex-end;
   color: var(--primary-text-color);
   display: flex;
+  // The value is the part that must stay readable; the name gives way.
   flex-direction: column;
+  flex-shrink: 0;
   justify-content: center;
   line-height: var(--ha-line-height-condensed);
   margin-left: auto;
+  padding-left: 8px;
   text-transform: none !important;
   z-index: 1;
 }
