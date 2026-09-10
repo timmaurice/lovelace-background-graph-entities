@@ -116,6 +116,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   private _transformCache = new Map<string, ValueTransform | null>();
 
   private _renderRetryMap = new Map<HTMLElement, number>();
+  private _resizeObserver?: ResizeObserver;
+  private _resizeFrame?: number;
   private _lastSortedEntityIds: string[] = [];
 
   public setConfig(config: BackgroundGraphEntitiesConfig): void {
@@ -149,6 +151,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   connectedCallback(): void {
     super.connectedCallback();
     this._setupUpdateInterval();
+    this._observeResize();
   }
 
   disconnectedCallback(): void {
@@ -157,7 +160,29 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       clearInterval(this._timerId);
       this._timerId = undefined;
     }
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = undefined;
+    if (this._resizeFrame !== undefined) {
+      cancelAnimationFrame(this._resizeFrame);
+      this._resizeFrame = undefined;
+    }
     this._renderRetryMap.clear();
+  }
+
+  // Each graph is an svg with a pixel viewBox and `preserveAspectRatio="none"`,
+  // so a column that changes width stretches the strokes instead of redrawing
+  // them. Redraw on resize; coalesced into one frame because the observer fires
+  // for every step of a drag.
+  private _observeResize(): void {
+    if (this._resizeObserver || typeof ResizeObserver === 'undefined') return;
+    this._resizeObserver = new ResizeObserver(() => {
+      if (this._resizeFrame !== undefined) cancelAnimationFrame(this._resizeFrame);
+      this._resizeFrame = requestAnimationFrame(() => {
+        this._resizeFrame = undefined;
+        this._renderAllGraphs();
+      });
+    });
+    this._resizeObserver.observe(this);
   }
 
   private _setupUpdateInterval(): void {

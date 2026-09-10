@@ -2937,6 +2937,74 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Redrawing on resize', () => {
+    let observed: Element[];
+    let fireResize: (() => void) | undefined;
+    const mockNow = new Date('2023-01-01T11:30:00Z');
+
+    beforeEach(() => {
+      observed = [];
+      fireResize = undefined;
+      // jsdom has no ResizeObserver; this one just hands the callback back.
+      (window as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+        constructor(callback: () => void) {
+          fireResize = callback;
+        }
+        observe(target: Element) {
+          observed.push(target);
+        }
+        disconnect() {}
+        unobserve() {}
+      };
+      vi.useFakeTimers();
+      vi.setSystemTime(mockNow);
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [
+          { lu: new Date('2023-01-01T09:30:00Z').getTime() / 1000, s: '5' },
+          { lu: new Date('2023-01-01T10:30:00Z').getTime() / 1000, s: '15' },
+        ],
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      delete (window as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+    });
+
+    it('should observe itself while connected', async () => {
+      // The element in the outer beforeEach was created before the stub existed.
+      document.body.removeChild(element);
+      document.body.appendChild(element);
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
+      await element.updateComplete;
+
+      expect(observed).toContain(element);
+    });
+
+    it('should redraw the graph at the new width', async () => {
+      document.body.removeChild(element);
+      document.body.appendChild(element);
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 2, points_per_hour: 1 });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+
+      const svg = element.shadowRoot?.querySelector('svg');
+      expect(svg?.getAttribute('viewBox')).toBe('0 0 100 50');
+
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 250 });
+      fireResize!();
+      await flushFrames();
+
+      // Without a redraw the old viewBox is simply stretched, which is what
+      // distorted the strokes.
+      expect(element.shadowRoot?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 250 50');
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 100 });
+    });
+  });
+
   describe('History window across a DST switch', () => {
     const originalTz = process.env.TZ;
 
