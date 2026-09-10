@@ -82,6 +82,48 @@ test.describe('The card on a real dashboard', () => {
     await expect(graph.locator('path.graph-path')).toHaveCount(1);
   });
 
+  test('asks the recorder for every row in one call', async ({ page }) => {
+    // Only a real frontend shows what actually goes over the websocket, and the
+    // per-row fetch this replaces is invisible to a mocked callWS.
+    const historyRequests: { entity_ids: string[] }[] = [];
+    page.on('websocket', (socket) => {
+      socket.on('framesent', (frame) => {
+        const payload = String(frame.payload);
+        if (!payload.includes('history/history_during_period')) return;
+        historyRequests.push(JSON.parse(payload) as { entity_ids: string[] });
+      });
+    });
+
+    await page.goto(`/${urlPath}/0`);
+    await expect(
+      page.locator(`background-graph-entities .graph-container[data-entity-id="${TEMPERATURE}"] svg`),
+    ).toHaveCount(1, { timeout: 60_000 });
+
+    expect(historyRequests).toHaveLength(1);
+    expect(historyRequests[0].entity_ids).toEqual([TEMPERATURE, HUMIDITY]);
+  });
+
+  test('opens more-info from the keyboard', async ({ page }) => {
+    await page.goto(`/${urlPath}/0`);
+    const row = page.locator('background-graph-entities').getByRole('button', { name: 'E2E living room' });
+    await expect(row).toBeVisible({ timeout: 60_000 });
+
+    await row.press('Enter');
+
+    // The dialog is Home Assistant's own, so this only passes if the event the
+    // card fires is the one the frontend listens for. Assert on what it paints,
+    // not on the custom element - that host has no box of its own.
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    // And on the row's own entity, not just on any dialog. The history link is
+    // a real anchor, so its href survives the dialog's shadow roots.
+    await expect(page.getByRole('link', { name: /show more/i })).toHaveAttribute(
+      'href',
+      new RegExp(`entity_id=${TEMPERATURE}`),
+      { timeout: 15_000 },
+    );
+  });
+
   test('comes back after leaving the view and returning', async ({ page }) => {
     // Views are torn out of the DOM on a switch. A card that does not notice it
     // is visible again comes back empty, and no unit test sees that.
