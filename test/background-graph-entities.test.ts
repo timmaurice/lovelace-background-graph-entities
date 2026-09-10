@@ -536,6 +536,38 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Locale-aware durations', () => {
+    it('should group the hour count the way the locale does', async () => {
+      hass.locale = { language: 'de', number_format: 'decimal_comma' };
+      hass.states['sensor.uptime'] = {
+        entity_id: 'sensor.uptime',
+        state: '75000',
+        attributes: { friendly_name: 'Uptime', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.uptime'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      // 75000 minutes = 1250h 0min; every other value on the card would render
+      // that as 1.250 in this locale.
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('1.250h 0min');
+    });
+
+    it('should group a sub-hour value the same way', async () => {
+      hass.locale = { language: 'en', number_format: 'comma_decimal' };
+      hass.states['sensor.short'] = {
+        entity_id: 'sensor.short',
+        state: '45',
+        attributes: { friendly_name: 'Short', unit_of_measurement: 'min' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.short'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.entity-value')?.textContent?.trim()).toBe('45 min');
+    });
+  });
+
   describe('Interactivity', () => {
     it('should render a toggle for on/off entities', async () => {
       hass.states['switch.test'] = {

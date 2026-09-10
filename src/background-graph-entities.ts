@@ -784,13 +784,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       // "above_horizon °C" and, for a minutes unit, "NaN min".
       displayValue = effectiveStateString;
     } else if (unit.toLowerCase() === 'min') {
-      // Special formatting for time in minutes
+      // Special formatting for time in minutes. The numbers go through the same
+      // locale-aware formatter as every other value - built straight from a JS
+      // number they carried no thousands separator, so a four-digit hour count
+      // read differently from every other number on the card.
       if (effectiveNum >= S_IN_MIN) {
         const hours = Math.floor(effectiveNum / S_IN_MIN);
-        const minutes = effectiveNum % S_IN_MIN;
-        displayValue = `${hours}h ${Math.floor(minutes)}min`;
+        const minutes = Math.floor(effectiveNum % S_IN_MIN);
+        displayValue = `${formatNumber(hours, this.hass.locale)}h ${formatNumber(minutes, this.hass.locale)}min`;
       } else {
-        displayValue = `${Math.floor(effectiveNum)} ${unit}`;
+        displayValue = `${formatNumber(Math.floor(effectiveNum), this.hass.locale)} ${unit}`;
       }
     } else {
       // Prefer the entity registry's display_precision. When that isn't set,
