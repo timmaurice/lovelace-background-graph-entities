@@ -1494,6 +1494,29 @@ describe('BackgroundGraphEntities', () => {
       expect(result[3].value).toBe(30);
       expect(result[4].value).toBe(30);
     });
+
+    it('should downsample a week of dense data in one pass', () => {
+      // A sample every 10s for a week - 60k states over 2016 buckets. The old
+      // implementation walked every state for every bucket and needed roughly a
+      // second per entity for exactly this shape of data; the budget here is
+      // deliberately far above the one-pass cost and far below the quadratic one.
+      vi.useRealTimers();
+      const hours = 168;
+      const perHour = 12;
+      const now = Date.now();
+      const dense: { timestamp: Date; value: number }[] = [];
+      for (let t = now - hours * 3600 * 1000; t <= now; t += 10_000) {
+        dense.push({ timestamp: new Date(t), value: 20 + Math.sin(t / 1e6) * 5 });
+      }
+
+      const started = performance.now();
+      const result = downsampleHistory(dense, hours, perHour);
+      const elapsed = performance.now() - started;
+
+      expect(result).toHaveLength(hours * perHour + 1);
+      expect(result.every((point) => Number.isFinite(point.value))).toBe(true);
+      expect(elapsed).toBeLessThan(250);
+    });
   });
 
   describe('Gaps for unavailable states (show_gaps)', () => {
