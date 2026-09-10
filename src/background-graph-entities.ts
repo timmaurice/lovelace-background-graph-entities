@@ -14,7 +14,15 @@ import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
 import { line as d3Line, curveBasis, curveLinear, curveNatural, curveStep, CurveFactory } from 'd3-shape';
 import styles from './styles/card.styles.scss';
-import { compileValueTransform, downsampleHistory, formatNumber, MS_IN_S, S_IN_MIN, ValueTransform } from './utils.js';
+import {
+  compileValueTransform,
+  downsampleHistory,
+  formatNumber,
+  MS_IN_H,
+  MS_IN_S,
+  S_IN_MIN,
+  ValueTransform,
+} from './utils.js';
 import { extent, max as d3max, min as d3min } from 'd3-array';
 import { EntityProblem, resolveEntity } from './entity.js';
 import { localize } from './localize.js';
@@ -925,8 +933,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
     const end = new Date();
-    const start = new Date();
-    start.setHours(end.getHours() - hoursToShow);
+    // Elapsed hours, not wall-clock hours: `setHours` moves by calendar hour, so
+    // across a DST switch the axis covered 23 or 25 real hours while the buckets
+    // covered 24, and every point sat an hour off.
+    const start = new Date(end.getTime() - hoursToShow * MS_IN_H);
 
     const xDomain: [Date, Date] = [start, end];
 
@@ -1067,8 +1077,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     const hoursToShow = this._config?.hours_to_show || DEFAULT_HOURS_TO_SHOW;
     const pointsPerHour = this._config?.points_per_hour || DEFAULT_POINTS_PER_HOUR;
-    const start = new Date();
-    start.setHours(start.getHours() - hoursToShow);
+    const end = new Date();
+    // Same elapsed-hours arithmetic as the axis and the bucket grid, so all
+    // three describe the same window across a DST switch.
+    const start = new Date(end.getTime() - hoursToShow * MS_IN_H);
 
     try {
       const history = await this.hass.callWS<{
@@ -1076,7 +1088,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       }>({
         type: 'history/history_during_period',
         start_time: start.toISOString(),
-        end_time: new Date().toISOString(),
+        end_time: end.toISOString(),
         entity_ids: entityIds,
         minimal_response: true,
         no_attributes: true,

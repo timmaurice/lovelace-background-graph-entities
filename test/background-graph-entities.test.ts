@@ -2937,6 +2937,57 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('History window across a DST switch', () => {
+    const originalTz = process.env.TZ;
+
+    beforeEach(() => {
+      // Europe/Berlin springs forward at 02:00 on 2024-03-31, so the calendar
+      // day the card looks back over is only 23 real hours long.
+      process.env.TZ = 'Europe/Berlin';
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-03-31T03:30:00Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      process.env.TZ = originalTz;
+    });
+
+    it('should request exactly hours_to_show elapsed hours', async () => {
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 24 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const [message] = (hass.callWS as Mock).mock.calls.find(([m]) => m?.type === 'history/history_during_period') as [
+        { start_time: string; end_time: string },
+      ];
+      const span = new Date(message.end_time).getTime() - new Date(message.start_time).getTime();
+      expect(span).toBe(24 * 60 * 60 * 1000);
+    });
+
+    it('should line the first bucket up with the start of the requested window', async () => {
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [{ lu: new Date('2024-03-31T02:00:00Z').getTime() / 1000, s: '5' }],
+      });
+      element.hass = hass;
+      element.setConfig({ ...config, hours_to_show: 24, points_per_hour: 1 });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const [message] = (hass.callWS as Mock).mock.calls.find(([m]) => m?.type === 'history/history_during_period') as [
+        { start_time: string },
+      ];
+      const history = (element as unknown as { _history: Map<string, { downsampled: { timestamp: Date }[] }> })
+        ._history;
+      // The anchor point of the bucket grid has to be the moment the fetch
+      // window opens, or every bucket is shifted by the DST hour.
+      expect(history.get('sensor.test')?.downsampled[0].timestamp.toISOString()).toBe(
+        new Date(message.start_time).toISOString(),
+      );
+    });
+  });
+
   describe('Text states', () => {
     it('should not append a unit to a text state', async () => {
       hass.states['sun.sun'] = {
