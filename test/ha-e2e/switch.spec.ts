@@ -85,4 +85,50 @@ test.describe("Home Assistant's own ha-switch", () => {
 
     expect(consoleErrors.filter((text) => /has already been used/i.test(text))).toEqual([]);
   });
+
+  // Material's switch redispatches an activation click, so one tap used to reach a
+  // `click` handler twice: the card called `homeassistant.toggle` on and straight back
+  // off about a millisecond apart, and automations triggered by the helper never ran.
+  // Only the real element does this - the mocked `ha-switch` of the static suite cannot
+  // see it.
+  test('sends exactly one toggle service call per tap', async ({ page }) => {
+    await setState(TOGGLE, 'off', { friendly_name: 'E2E toggle' });
+    await page.goto(`/${urlPath}/0`);
+
+    const toggle = page.locator('background-graph-entities .entity-with-toggle ha-switch');
+    await expect(toggle).toBeVisible({ timeout: 60_000 });
+
+    await page.evaluate(() => {
+      const recorded: Record<string, unknown>[] = [];
+      (window as unknown as { __serviceCalls: typeof recorded }).__serviceCalls = recorded;
+      const send = WebSocket.prototype.send;
+      WebSocket.prototype.send = function (data) {
+        try {
+          const message = JSON.parse(String(data)) as Record<string, unknown>;
+          if (message.type === 'call_service') recorded.push(message);
+        } catch {
+          // Binary frames and anything else the frontend sends are not our business.
+        }
+        return send.call(this, data);
+      };
+    });
+
+    const recorded = () =>
+      page.evaluate(() => (window as unknown as { __serviceCalls: Record<string, unknown>[] }).__serviceCalls);
+
+    await toggle.click();
+    await expect.poll(() => recorded().then((calls) => calls.length), { timeout: 10_000 }).toBeGreaterThan(0);
+    // The duplicate used to land about a millisecond behind the first one, so a short
+    // settle is enough to catch it - and the entity is state-only, so its state never
+    // answers the question.
+    await page.waitForTimeout(1000);
+
+    const calls = await recorded();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      domain: 'homeassistant',
+      service: 'toggle',
+      service_data: { entity_id: TOGGLE },
+    });
+  });
 });

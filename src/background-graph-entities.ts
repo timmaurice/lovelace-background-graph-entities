@@ -945,10 +945,14 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
           isToggleable && !isTileStyle
             ? html`
                 <div class="entity-value entity-with-toggle">
+                  <!-- Toggles on change, not click: Material's switch redispatches an activation
+                       click, so a click handler fired twice per tap and flipped the entity on and
+                       off 1ms apart. The click handler only keeps the row from opening more-info. -->
                   <ha-switch
                     aria-label=${toggleLabel}
                     .checked=${stateObj.state === 'on'}
-                    @click=${(e: Event) => {
+                    @click=${(e: Event) => e.stopPropagation()}
+                    @change=${(e: Event) => {
                       e.stopPropagation();
                       this._toggleEntity(entityConfig.entity);
                     }}

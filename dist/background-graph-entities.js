@@ -97,10 +97,14 @@ const ce={attribute:!0,type:String,converter:b,reflect:!1,hasChanged:x},ue=(e=ce
         <div class="graph-container" data-entity-id=${e.entity} data-entity-index=${r}></div>
         ${h&&!c?j`
                 <div class="entity-value entity-with-toggle">
+                  <!-- Toggles on change, not click: Material's switch redispatches an activation
+                       click, so a click handler fired twice per tap and flipped the entity on and
+                       off 1ms apart. The click handler only keeps the row from opening more-info. -->
                   <ha-switch
                     aria-label=${b}
                     .checked=${"on"===n.state}
-                    @click=${t=>{t.stopPropagation(),this._toggleEntity(e.entity)}}
+                    @click=${e=>e.stopPropagation()}
+                    @change=${t=>{t.stopPropagation(),this._toggleEntity(e.entity)}}
                   ></ha-switch>
                 </div>
               `:j`<div class="entity-value">

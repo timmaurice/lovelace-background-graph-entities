@@ -584,7 +584,7 @@ describe('BackgroundGraphEntities', () => {
       expect(toggle?.checked).toBe(true);
     });
 
-    it('should call the toggle service when the switch is clicked', async () => {
+    it('should call the toggle service when the switch changes', async () => {
       hass.states['switch.test'] = {
         entity_id: 'switch.test',
         state: 'on',
@@ -595,9 +595,49 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const toggle = element.shadowRoot?.querySelector('ha-switch');
-      (toggle as HTMLElement).click();
+      toggle?.dispatchEvent(new Event('change', { bubbles: true }));
 
       expect(hass.callService).toHaveBeenCalledWith('homeassistant', 'toggle', { entity_id: 'switch.test' });
+    });
+
+    // Material's switch redispatches an activation click, so one tap reached a click
+    // handler twice and toggled the entity on and straight back off 1ms apart.
+    it('should not toggle on a click, only on the change it produces', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const toggle = element.shadowRoot?.querySelector('ha-switch');
+      // What a real tap looks like: click, change, and the redispatched click.
+      (toggle as HTMLElement).click();
+      toggle?.dispatchEvent(new Event('change', { bubbles: true }));
+      (toggle as HTMLElement).click();
+
+      expect(hass.callService).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not open more-info when the switch is operated', async () => {
+      hass.states['switch.test'] = {
+        entity_id: 'switch.test',
+        state: 'on',
+        attributes: { friendly_name: 'Test Switch' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['switch.test'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      const moreInfo = vi.fn();
+      element.addEventListener('hass-more-info', moreInfo);
+      const toggle = element.shadowRoot?.querySelector('ha-switch');
+      (toggle as HTMLElement).click();
+      toggle?.dispatchEvent(new Event('change', { bubbles: true }));
+
+      expect(moreInfo).not.toHaveBeenCalled();
     });
   });
 
