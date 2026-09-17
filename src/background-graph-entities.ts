@@ -9,6 +9,7 @@ import {
   EntityConfig,
   ColorThreshold,
   HassEntity,
+  LovelaceGridOptions,
 } from './types.js';
 import { scaleLinear, scaleTime, ScaleLinear } from 'd3-scale';
 import { select, Selection } from 'd3-selection';
@@ -255,23 +256,17 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   }
 
   /**
-   * Sizing for sections dashboards. A row is 40px tall with an 8px gap, the
-   * content adds 16px of padding top and bottom, and a header adds 72px. Home
-   * Assistant's grid row is 56px with an 8px gap, hence the /64.
+   * Sizing for sections dashboards.
+   *
+   * `rows: 'auto'` rather than a height worked out from the entity count, the
+   * row height and the header: the estimate and what the card paints are two
+   * separate calculations, and they drift apart. Every row the card does not
+   * render - an entity that is gone, a header the config turned off - is then
+   * space the section still reserves, and the card sits above a gap. Home
+   * Assistant measures the rendered height instead, which is always right.
    */
-  public getGridOptions(): Record<string, number> {
-    const rowCount = this._config?.entities?.length ?? 1;
-    const isTile = this._config?.tile_style === true;
-    const rowHeight = isTile ? 34 + 8 : 40 + 8;
-    const padding = isTile ? 20 : 32;
-    const header = this._config?.title || this._config?.average_in_title ? 72 : 0;
-    const pixels = padding + header + rowCount * rowHeight - 8;
-    return {
-      rows: Math.max(1, Math.ceil((pixels + 8) / 64)),
-      min_rows: 1,
-      columns: 12,
-      min_columns: 6,
-    };
+  public getGridOptions(): LovelaceGridOptions {
+    return { columns: 'full', min_columns: 6, rows: 'auto', min_rows: 1 };
   }
 
   protected updated(changedProperties: Map<string | number | symbol, unknown>): void {

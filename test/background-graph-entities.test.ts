@@ -3161,46 +3161,39 @@ describe('BackgroundGraphEntities', () => {
   });
 
   describe('getGridOptions', () => {
-    const grid = (): Record<string, number> =>
-      (element as unknown as { getGridOptions(): Record<string, number> }).getGridOptions();
+    const grid = (): Record<string, unknown> =>
+      (element as unknown as { getGridOptions(): Record<string, unknown> }).getGridOptions();
 
     it('should describe a full-width card that may shrink to half', () => {
       element.setConfig(config);
-      expect(grid().columns).toBe(12);
+      expect(grid().columns).toBe('full');
       expect(grid().min_columns).toBe(6);
       expect(grid().min_rows).toBe(1);
     });
 
-    it('should grow with the number of rows', () => {
+    it('should let Home Assistant measure the height', () => {
+      // The row count used to be worked out from the entity count, the row
+      // height and the header - an estimate that is a second calculation
+      // beside the one that paints the card, and drifts from it. A row that is
+      // not rendered was then space the section reserved anyway, leaving the
+      // card sitting above a gap.
       element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
-      const one = grid().rows;
+      expect(grid().rows).toBe('auto');
+
       element.setConfig({
         type: 'custom:background-graph-entities',
-        entities: ['sensor.test', 'sensor.test', 'sensor.test', 'sensor.test', 'sensor.test', 'sensor.test'],
+        entities: ['sensor.test', 'sensor.test', 'sensor.test'],
+        title: 'Room',
+        tile_style: true,
       });
-      expect(grid().rows).toBeGreaterThan(one);
+      expect(grid().rows).toBe('auto');
     });
 
-    it('should leave room for a title', () => {
-      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
-      const untitled = grid().rows;
-      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'], title: 'Room' });
-      expect(grid().rows).toBeGreaterThan(untitled);
-    });
-
-    it('should ask for less height in tile style', () => {
-      const entities = Array.from({ length: 12 }, () => 'sensor.test');
-      element.setConfig({ type: 'custom:background-graph-entities', entities });
-      const standard = grid().rows;
-      element.setConfig({ type: 'custom:background-graph-entities', entities, tile_style: true });
-      expect(grid().rows).toBeLessThan(standard);
-    });
-
-    it('should never ask for less than one row before a config arrives', () => {
+    it('should answer before a config arrives', () => {
       const fresh = document.createElement('background-graph-entities') as BackgroundGraphEntitiesType;
-      expect(
-        (fresh as unknown as { getGridOptions(): Record<string, number> }).getGridOptions().rows,
-      ).toBeGreaterThanOrEqual(1);
+      const options = (fresh as unknown as { getGridOptions(): Record<string, unknown> }).getGridOptions();
+      expect(options.rows).toBe('auto');
+      expect(options.min_rows).toBe(1);
     });
   });
 

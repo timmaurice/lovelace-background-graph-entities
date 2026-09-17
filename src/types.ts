@@ -1,3 +1,12 @@
+export interface LovelaceGridOptions {
+  columns?: number | 'full';
+  min_columns?: number;
+  max_columns?: number;
+  rows?: number | 'auto';
+  min_rows?: number;
+  max_rows?: number;
+}
+
 // A basic representation of the Home Assistant object
 export interface HomeAssistant {
   states: { [entity_id: string]: HassEntity };
