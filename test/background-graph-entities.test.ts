@@ -2136,6 +2136,70 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('History Aggregate Memoization', () => {
+    // The memo is internal; reach in to prove scans don't repeat.
+    interface Series {
+      raw: { timestamp: Date; value: number }[];
+      downsampled: { timestamp: Date; value: number }[];
+    }
+    interface PickAccess {
+      _pickHistoryValue(h: Series | undefined, source: string, t?: (x: number) => number): number | undefined;
+    }
+
+    const buildSeries = (): Series => ({
+      raw: [10, 50, 30].map((value, i) => ({ timestamp: new Date(i * 1000), value })),
+      downsampled: [20, 40].map((value, i) => ({ timestamp: new Date(i * 1000), value })),
+    });
+
+    it('computes an aggregate once per series and serves repeats from the cache', () => {
+      const el = element as unknown as PickAccess;
+      const series = buildSeries();
+      let calls = 0;
+      const transform = (x: number) => {
+        calls++;
+        return x * 2;
+      };
+      expect(el._pickHistoryValue(series, 'max', transform)).toBe(100);
+      expect(calls).toBe(3); // one transform call per raw sample
+      expect(el._pickHistoryValue(series, 'max', transform)).toBe(100);
+      expect(calls).toBe(3); // cached: no rescan
+    });
+
+    it('keeps separate entries per source and per transform on a shared series', () => {
+      const el = element as unknown as PickAccess;
+      const series = buildSeries();
+      const double = (x: number) => x * 2;
+      const negate = (x: number) => 0 - x;
+      expect(el._pickHistoryValue(series, 'max', double)).toBe(100);
+      expect(el._pickHistoryValue(series, 'max', negate)).toBe(-10);
+      expect(el._pickHistoryValue(series, 'min', double)).toBe(20);
+      expect(el._pickHistoryValue(series, 'latest', double)).toBe(80); // downsampled tail
+      expect(el._pickHistoryValue(series, 'max')).toBe(50); // untransformed entry
+      // The earlier entries must not have been overwritten.
+      expect(el._pickHistoryValue(series, 'max', double)).toBe(100);
+    });
+
+    it('recomputes when the series object is replaced, as a fetch does', () => {
+      const el = element as unknown as PickAccess;
+      let calls = 0;
+      const transform = (x: number) => {
+        calls++;
+        return x * 2;
+      };
+      expect(el._pickHistoryValue(buildSeries(), 'max', transform)).toBe(100);
+      expect(el._pickHistoryValue(buildSeries(), 'max', transform)).toBe(100);
+      expect(calls).toBe(6); // fresh object → fresh scan
+    });
+
+    it('caches an undefined result for an empty series', () => {
+      const el = element as unknown as PickAccess;
+      const empty: Series = { raw: [], downsampled: [] };
+      expect(el._pickHistoryValue(empty, 'max')).toBeUndefined();
+      expect(el._pickHistoryValue(empty, 'max')).toBeUndefined();
+      expect(el._pickHistoryValue(undefined, 'max')).toBeUndefined();
+    });
+  });
+
   describe('Value Transform / Unit Override Feature', () => {
     const mockNow = new Date('2023-01-01T11:30:00Z');
 

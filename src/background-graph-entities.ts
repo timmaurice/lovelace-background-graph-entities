@@ -123,6 +123,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   // rebuilds (e.g. editor edits) neither recompile nor re-warn. `null` caches a
   // failed compile.
   private _transformCache = new Map<string, ValueTransform | null>();
+  // Memoized _pickHistoryValue results; see the comment there.
+  private _aggregateCache = new WeakMap<HistorySeries, Map<string, Map<ValueTransform | null, number | undefined>>>();
 
   private _renderRetryMap = new Map<HTMLElement, number>();
   private _resizeObserver?: ResizeObserver;
@@ -435,6 +437,37 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     transform?: ValueTransform,
   ): number | undefined {
     if (!historyData) return undefined;
+    // History is immutable between fetches, so an aggregate cannot change until
+    // _history is replaced — yet every hass-driven render used to re-scan the
+    // full raw array (one transform call per sample) for each consumer: row
+    // value, sort comparator (both operands, per comparison), title average,
+    // and icon color. Memoize per series object; a fetch builds fresh series
+    // objects, so the WeakMap invalidates itself and old entries are GC'd. The
+    // transform key is the compiled function's reference, which is stable via
+    // _transformCache, so rows sharing a graph_entity with different transforms
+    // get separate entries.
+    let bySource = this._aggregateCache.get(historyData);
+    if (!bySource) {
+      bySource = new Map();
+      this._aggregateCache.set(historyData, bySource);
+    }
+    let byTransform = bySource.get(source);
+    if (!byTransform) {
+      byTransform = new Map();
+      bySource.set(source, byTransform);
+    }
+    const transformKey = transform ?? null;
+    if (byTransform.has(transformKey)) return byTransform.get(transformKey);
+    const value = this._computeHistoryValue(historyData, source, transform);
+    byTransform.set(transformKey, value);
+    return value;
+  }
+
+  private _computeHistoryValue(
+    historyData: HistorySeries,
+    source: 'latest' | 'max' | 'min' | 'avg' | 'median',
+    transform?: ValueTransform,
+  ): number | undefined {
     const history = source === 'max' || source === 'min' ? historyData.raw : historyData.downsampled;
     if (!history || history.length === 0) return undefined;
     // Transform before aggregating: for a decreasing transform (e.g. `50 - x`)
