@@ -1,6 +1,6 @@
 {
   "name": "background-graph-entities",
-  "version": "1.12.0",
+  "version": "1.12.1",
   "description": "The `background-graph-entities` custom component for Home Assistant displays a list of entities with their current state and a mini graph showing the entity's history. This component is ideal for monitoring various sensor data, such as temperature, humidity, or other metrics.",
   "homepage": "https://github.com/timmaurice/lovelace-background-graph-entities#readme",
   "bugs": {
@@ -41,16 +41,16 @@
     "eslint-plugin-lit": "^2.3.1",
     "eslint-plugin-wc": "^3.1.0",
     "globals": "^17.12.0",
-    "jsdom": "^30.1.0",
+    "jsdom": "^30.1.1",
     "lit": "^3.3.3",
     "npm-run-all": "^4.1.5",
-    "prettier": "^3.9.8",
+    "prettier": "^3.9.9",
     "rollup": "^4.63.4",
     "rollup-plugin-lit-css": "^6.0.1",
-    "sass": "^1.104.1",
+    "sass": "^1.105.0",
     "serve": "^14.2.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^5.0.1"
   },
   "dependencies": {
