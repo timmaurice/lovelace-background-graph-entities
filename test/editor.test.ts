@@ -410,7 +410,7 @@ describe('BackgroundGraphEntitiesEditor', () => {
       // English prose here reached a German dashboard's editor DOM. It cannot be
       // localized without `hass`, so it must not be words at all.
       expect(bare.shadowRoot?.textContent?.trim()).toBe('');
-      expect(bare.shadowRoot?.querySelector('ha-circular-progress')).not.toBeNull();
+      expect(bare.shadowRoot?.querySelector('ha-spinner')).not.toBeNull();
       bare.remove();
     });
 
@@ -418,7 +418,7 @@ describe('BackgroundGraphEntitiesEditor', () => {
       // `_config` is initialised at declaration and `setConfig` throws before
       // assigning, so a missing `_config` never gates this render - only `hass`.
       await editor.updateComplete;
-      expect(editor.shadowRoot?.querySelector('ha-circular-progress')).toBeNull();
+      expect(editor.shadowRoot?.querySelector('ha-spinner')).toBeNull();
       expect(field('hours_to_show')).toBeTruthy();
     });
   });

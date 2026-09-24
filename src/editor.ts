@@ -1052,7 +1052,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
       // The one frame that renders before Home Assistant hands over `hass`, which
       // `localize` needs to exist at all. Nothing here can be translated, so it
       // must not be words: English prose reached a German dashboard's editor.
-      return html`<ha-circular-progress indeterminate></ha-circular-progress>`;
+      return html`<ha-spinner></ha-spinner>`;
     }
 
     if (this._editingIndex !== null) {

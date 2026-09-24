@@ -114,6 +114,35 @@ if (!customElements.get('ha-state-icon')) customElements.define('ha-state-icon',
 class HaIcon extends HaStateIcon {}
 if (!customElements.get('ha-icon')) customElements.define('ha-icon', HaIcon);
 
+// Stand-in for HA's always-indeterminate ha-spinner (a Web Awesome spinner), which the
+// editor shows for the one frame before `hass` arrives.
+const SPINNER_SIZES = { tiny: '16px', small: '28px', medium: '48px', large: '68px' };
+class HaSpinner extends HTMLElement {
+  static get observedAttributes() {
+    return ['size'];
+  }
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display: inline-flex; width: 1em; height: 1em; font-size: var(--ha-spinner-size, 48px); }
+        .ring { box-sizing: border-box; width: 100%; height: 100%; border-radius: 50%;
+          border: 4px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+          border-top-color: var(--primary-color, #03a9f4); animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      </style>
+      <div class="ring" role="progressbar" aria-label="Loading"></div>
+    `;
+  }
+  attributeChangedCallback() {
+    const size = SPINNER_SIZES[this.getAttribute('size')];
+    if (size) this.style.setProperty('--ha-spinner-size', size);
+    else this.style.removeProperty('--ha-spinner-size');
+  }
+}
+if (!customElements.get('ha-spinner')) customElements.define('ha-spinner', HaSpinner);
+
 class HaSwitch extends HTMLElement {
   constructor() {
     super();

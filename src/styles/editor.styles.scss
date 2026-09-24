@@ -91,6 +91,12 @@ ha-slider {
   width: 100%;
 }
 
+// Centred the way Home Assistant's own element editor places its loading spinner.
+ha-spinner {
+  display: block;
+  margin: auto;
+}
+
 ha-expansion-panel {
   --expansion-panel-content-padding: 0;
   margin-top: var(--bge-editor-spacing);
