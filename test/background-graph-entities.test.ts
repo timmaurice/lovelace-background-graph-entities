@@ -3148,6 +3148,62 @@ describe('BackgroundGraphEntities', () => {
       expect(stub().entities[0].entity).toBe('');
     });
 
+    describe('on a typical install', () => {
+      // The sun integration's timestamp sensors sort first and parseFloat read
+      // their ISO state as 2026, so the preview showed "Sun Next dawn 2,026".
+      const add = (id: string, state: string, attributes: Record<string, unknown> = {}) => {
+        hass.states[id] = { entity_id: id, state, attributes };
+      };
+
+      beforeEach(() => {
+        delete hass.states['sensor.test'];
+        add('sensor.sun_next_dawn', '2026-09-26T04:52:11+00:00', { device_class: 'timestamp' });
+        hass.entities['sensor.sun_next_dawn'] = { entity_id: 'sensor.sun_next_dawn', entity_category: 'diagnostic' };
+        add('sensor.router_cpu', '12', { state_class: 'measurement' });
+        hass.entities['sensor.router_cpu'] = { entity_id: 'sensor.router_cpu', entity_category: 'diagnostic' };
+        add('sensor.grid_energy', '1834.2', { state_class: 'total_increasing', device_class: 'energy' });
+        add('sensor.desk_power', '42.5', { state_class: 'measurement', device_class: 'power' });
+        add('sensor.office_temperature', '21.5', { state_class: 'measurement', device_class: 'temperature' });
+      });
+
+      it('should prefer a suggested measurement sensor over a timestamp and a diagnostic', () => {
+        expect(stub(hass).entities[0].entity).toBe('sensor.office_temperature');
+      });
+
+      it('should skip a suggested sensor that has no numeric state', () => {
+        hass.states['sensor.office_temperature'].state = 'unavailable';
+        expect(stub(hass).entities[0].entity).toBe('sensor.desk_power');
+      });
+
+      it('should fall back to a primary measurement sensor', () => {
+        delete hass.states['sensor.office_temperature'];
+        expect(stub(hass).entities[0].entity).toBe('sensor.desk_power');
+      });
+
+      it('should skip a hidden measurement sensor in that fallback', () => {
+        delete hass.states['sensor.office_temperature'];
+        hass.entities['sensor.desk_power'] = { entity_id: 'sensor.desk_power', hidden: true };
+        // Falls through to "any numeric sensor", which takes the first in order.
+        expect(stub(hass).entities[0].entity).toBe('sensor.router_cpu');
+      });
+
+      it('should fall back to any numeric sensor, but never a timestamp', () => {
+        delete hass.states['sensor.office_temperature'];
+        delete hass.states['sensor.desk_power'];
+        expect(stub(hass).entities[0].entity).toBe('sensor.router_cpu');
+        delete hass.states['sensor.router_cpu'];
+        delete hass.states['sensor.grid_energy'];
+        expect(stub(hass).entities[0].entity).toBe('sun.sun');
+      });
+
+      it('should honour the order of the ids Home Assistant offers within a tier', () => {
+        add('sensor.bedroom_humidity', '48', { state_class: 'measurement', device_class: 'humidity' });
+        expect(stub(hass, ['sensor.bedroom_humidity', 'sensor.office_temperature']).entities[0].entity).toBe(
+          'sensor.bedroom_humidity',
+        );
+      });
+    });
+
     it('should return nothing but the entities the user did not choose', () => {
       // hours_to_show only ever repeated the default.
       expect(Object.keys(stub(hass, ['sensor.test']))).toEqual(['entities']);
@@ -3582,6 +3638,31 @@ describe('BackgroundGraphEntities', () => {
       expect(resolveEntity(hass, 'sun.sun').ok).toBe(true);
       expect(resolveEntity(hass, 'sun.sun', { numeric: true })).toMatchObject({ reason: 'not_numeric' });
     });
+
+    it.each([
+      '2026-09-26T04:52:11+00:00',
+      '2026-09-26T04:52:11.123456+00:00',
+      '2026-09-26',
+      '04:52:11',
+      '12 °C',
+      '12,5',
+      '0x',
+      '',
+      '   ',
+      'NaN',
+      'Infinity',
+    ])('rejects %j as a number', (state) => {
+      hass.states['sensor.x'] = { entity_id: 'sensor.x', state, attributes: {} };
+      expect(resolveEntity(hass, 'sensor.x', { numeric: true })).toMatchObject({ reason: 'not_numeric' });
+    });
+
+    it.each(['0', '12', '12.5', '-3', '-0.25', '.5', '1e3', '1.5E-4', ' 21.5 ', '1834.200'])(
+      'accepts %j as a number',
+      (state) => {
+        hass.states['sensor.x'] = { entity_id: 'sensor.x', state, attributes: {} };
+        expect(resolveEntity(hass, 'sensor.x', { numeric: true }).ok).toBe(true);
+      },
+    );
 
     it('accepts on/off as numeric, because the card graphs it as 1/0', () => {
       hass.states['switch.ac'] = { entity_id: 'switch.ac', state: 'off', attributes: {} };
