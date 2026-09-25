@@ -18,6 +18,7 @@ import styles from './styles/card.styles.scss';
 import {
   compileValueTransform,
   downsampleHistory,
+  entityDisplayName,
   formatNumber,
   MS_IN_H,
   MS_IN_S,
@@ -597,8 +598,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (method === 'name') {
         // `|| ''` because a row can be missing its `entity` key entirely, and
         // `undefined.localeCompare` took the whole card down.
-        const nameA = a.name || stateObjA?.attributes.friendly_name || a.entity || '';
-        const nameB = b.name || stateObjB?.attributes.friendly_name || b.entity || '';
+        const nameA = entityDisplayName(this.hass, a.entity, a.name);
+        const nameB = entityDisplayName(this.hass, b.entity, b.name);
         comparison = nameA.localeCompare(nameB, this.hass.language || 'en', {
           sensitivity: 'base',
           numeric: numeric,
@@ -688,7 +689,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
   // Formats another entity's state for display next to the main value, shared by
   // graph_entity and extra_value_entity so both read the same. nameConfig (extra_value_name
-  // only) labels it: a string verbatim, `true` the friendly name. The label survives an
+  // only) labels it: a string verbatim, `true` the entity's name. The label survives an
   // unavailable entity, so the row still says which value is missing.
   private _formatCompanionValue(
     entityId: string,
@@ -700,7 +701,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
     const label =
       nameConfig === true
-        ? (stateObj?.attributes.friendly_name ?? entityId)
+        ? entityDisplayName(this.hass, entityId)
         : typeof nameConfig === 'string'
           ? nameConfig
           : undefined;
@@ -789,8 +790,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // The row is a click target, so it has to be reachable and operable from the
     // keyboard too. Keys that reach a nested control (the icon toggle, the
     // switch) are left alone - those bring their own handlers.
-    const rowLabel = entityConfig.name || stateObj.attributes.friendly_name || entityConfig.entity;
-    // The same name the row shows: skipping `friendly_name` made a row reading
+    const rowLabel = entityDisplayName(this.hass, entityConfig.entity, entityConfig.name);
+    // The same name the row shows: skipping the entity's name made a row reading
     // "Test Switch" announce itself as "switch.test".
     const toggleLabel = localize(this.hass, 'component.bge.card.toggle_entity', { name: rowLabel });
     const handleRowKeydown = (e: KeyboardEvent) => {
@@ -1394,6 +1395,7 @@ if (typeof window !== 'undefined') {
       type: ELEMENT_NAME,
       name: 'Background Graph Entities',
       description: 'A card to display entities with a background graph.',
+      preview: true,
       documentationURL: 'https://github.com/timmaurice/lovelace-background-graph-entities',
     });
   }

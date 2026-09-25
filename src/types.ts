@@ -19,11 +19,25 @@ export interface HomeAssistant {
   locale?: FrontendLocaleData;
   callWS: <T>(message: { type: string; [key: string]: unknown }) => Promise<T>;
   callService: (domain: string, service: string, serviceData?: object) => Promise<unknown>;
+  // HA 2026.4+; hacs.json still admits 2026.3, which lacks it.
+  formatEntityName?: (
+    stateObj: HassEntity,
+    name: string | EntityNameItem | EntityNameItem[] | undefined,
+    options?: EntityNameOptions,
+  ) => string;
   themes?: {
     darkMode?: boolean;
     [key: string]: unknown;
   };
   // You can expand this with more properties from the hass object if needed
+}
+
+// Mirrors the frontend's entity_name_config.ts, the shape hass.formatEntityName accepts.
+export type EntityNameItem =
+  { type: 'floor' | 'area' | 'parent_device' | 'device' | 'entity' } | { type: 'text'; text: string };
+
+export interface EntityNameOptions {
+  separator?: string;
 }
 
 // The user-selectable number format from HA's profile (hass.locale.number_format).

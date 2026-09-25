@@ -1,4 +1,4 @@
-import type { FrontendLocaleData } from './types.js';
+import type { FrontendLocaleData, HomeAssistant } from './types.js';
 
 export const MS_IN_S = 1000;
 export const S_IN_MIN = 60;
@@ -236,3 +236,19 @@ export const fireEvent = <T>(node: HTMLElement, type: string, detail?: T, option
   const event = new CustomEvent(type, { bubbles: true, cancelable: false, composed: true, ...options, detail });
   node.dispatchEvent(event);
 };
+
+/**
+ * An entity's display name: a configured `name` wins, then `hass.formatEntityName` - the
+ * helper HA's own cards name entities with - and, on a core without it (before 2026.4),
+ * the friendly name. The entity id is the last resort, also for an entity HA doesn't know.
+ */
+export function entityDisplayName(
+  hass: Pick<HomeAssistant, 'states' | 'formatEntityName'>,
+  entityId: string | undefined,
+  name?: string,
+): string {
+  if (name) return name;
+  const stateObj = entityId ? hass.states[entityId] : undefined;
+  if (!stateObj) return entityId ?? '';
+  return hass.formatEntityName?.(stateObj, undefined) || stateObj.attributes.friendly_name || stateObj.entity_id;
+}

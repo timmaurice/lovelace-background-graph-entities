@@ -9,7 +9,7 @@ import {
   SortConfig,
 } from './types';
 import { localize } from './localize';
-import { fireEvent } from './utils';
+import { entityDisplayName, fireEvent } from './utils';
 import editorStyles from './styles/editor.styles.scss';
 import { HexBase } from 'vanilla-colorful/lib/entrypoints/hex';
 
@@ -528,7 +528,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
     if (!entityConf) return html``;
 
     const stateObj = this.hass.states[entityConf.entity];
-    const title = entityConf.name || stateObj?.attributes.friendly_name || entityConf.entity;
+    const title = entityDisplayName(this.hass, entityConf.entity, entityConf.name);
 
     const overwriteAppearance = entityConf.overwrite_graph_appearance ?? false;
     const finalIconColor = entityConf.icon_color || 'var(--primary-text-color)';

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock, beforeAll } from 'vitest';
 import { HomeAssistant, BackgroundGraphEntitiesConfig } from '../src/types';
 import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../src/background-graph-entities';
-import { compileValueTransform, downsampleHistory, formatNumber } from '../src/utils';
+import { compileValueTransform, downsampleHistory, entityDisplayName, formatNumber } from '../src/utils';
 import { resolveEntity } from '../src/entity';
 
 // Mock console.info before the module is imported to prevent version logging.
@@ -3695,6 +3695,11 @@ describe('BackgroundGraphEntities', () => {
       container.remove();
     });
 
+    it('offers a live preview in the card picker', () => {
+      const entry = (window.customCards ?? []).find((card) => card.type === 'background-graph-entities');
+      expect(entry?.preview).toBe(true);
+    });
+
     it('survives a second load of the bundle without a duplicate define or picker entry', async () => {
       // A duplicate Lovelace resource entry loads this bundle twice.
       const entriesBefore = (window.customCards ?? []).filter((card) => card.type === 'background-graph-entities');
@@ -4058,6 +4063,34 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       expect(element.shadowRoot?.querySelector('.icon-container')?.getAttribute('aria-label')).toBe('Basculer Lampe');
+    });
+  });
+
+  describe('Entity display names', () => {
+    it('names a row with hass.formatEntityName when the core has it', async () => {
+      const formatEntityName = vi.fn(() => 'Kitchen Test Sensor');
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      element.hass = { ...hass, formatEntityName };
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.name-text')?.textContent).toBe('Kitchen Test Sensor');
+      expect(formatEntityName).toHaveBeenCalledWith(hass.states['sensor.test'], undefined);
+    });
+
+    it('keeps a configured name ahead of hass.formatEntityName', () => {
+      const formatEntityName = vi.fn(() => 'Kitchen Test Sensor');
+      expect(entityDisplayName({ ...hass, formatEntityName }, 'sensor.test', 'Mine')).toBe('Mine');
+      expect(formatEntityName).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the friendly name on a core without hass.formatEntityName', () => {
+      expect(entityDisplayName(hass, 'sensor.test')).toBe('Test Sensor');
+    });
+
+    it('falls back to the entity id when there is no state or no name to show', () => {
+      expect(entityDisplayName(hass, 'sensor.missing')).toBe('sensor.missing');
+      expect(entityDisplayName(hass, undefined)).toBe('');
+      expect(entityDisplayName({ ...hass, formatEntityName: () => '' }, 'sensor.test')).toBe('Test Sensor');
     });
   });
 
