@@ -64,6 +64,8 @@ export interface HassEntity {
 export interface HassEntityRegistryDisplayEntry {
   entity_id: string;
   display_precision?: number;
+  entity_category?: 'config' | 'diagnostic' | null;
+  hidden?: boolean;
 }
 
 // A basic representation of a Lovelace card
