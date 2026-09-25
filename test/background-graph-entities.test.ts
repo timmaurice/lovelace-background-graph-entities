@@ -3695,6 +3695,11 @@ describe('BackgroundGraphEntities', () => {
       container.remove();
     });
 
+    it('offers a live preview in the card picker', () => {
+      const entry = (window.customCards ?? []).find((card) => card.type === 'background-graph-entities');
+      expect(entry?.preview).toBe(true);
+    });
+
     it('survives a second load of the bundle without a duplicate define or picker entry', async () => {
       // A duplicate Lovelace resource entry loads this bundle twice.
       const entriesBefore = (window.customCards ?? []).filter((card) => card.type === 'background-graph-entities');

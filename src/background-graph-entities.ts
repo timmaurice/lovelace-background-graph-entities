@@ -1394,6 +1394,7 @@ if (typeof window !== 'undefined') {
       type: ELEMENT_NAME,
       name: 'Background Graph Entities',
       description: 'A card to display entities with a background graph.',
+      preview: true,
       documentationURL: 'https://github.com/timmaurice/lovelace-background-graph-entities',
     });
   }
