@@ -71,6 +71,30 @@ const PROBLEM_MESSAGE_KEYS: Record<EntityProblem, string> = {
   not_numeric: 'not_numeric',
 };
 
+// Quantities that change slowly enough to draw a smooth background line. Power,
+// current, battery and the like are left out: the card fits any numeric sensor,
+// and suggesting it for every one of them would crowd the picker. Plain
+// `pressure` is left out too - it also covers appliance, water and tyre pressure.
+const SUGGESTED_DEVICE_CLASSES = new Set([
+  'temperature',
+  'humidity',
+  'atmospheric_pressure',
+  'carbon_dioxide',
+  'pm25',
+  'pm10',
+  'moisture',
+]);
+
+/** Whether the card picker's "by entity" tab should offer this card for an entity. */
+function isSuggestedEntity(hass: HomeAssistant | undefined, entityId: string): boolean {
+  if (typeof entityId !== 'string' || !entityId.startsWith('sensor.')) return false;
+  const attributes = hass?.states?.[entityId]?.attributes;
+  if (attributes?.state_class !== 'measurement') return false;
+  if (!SUGGESTED_DEVICE_CLASSES.has(String(attributes.device_class ?? ''))) return false;
+  const entry = hass?.entities?.[entityId];
+  return !entry?.entity_category && !entry?.hidden;
+}
+
 const CURVE_FACTORIES = {
   linear: curveLinear,
   step: curveStep,
@@ -86,6 +110,7 @@ declare global {
       description: string;
       documentationURL: string;
       preview?: boolean;
+      getEntitySuggestion?: (hass: HomeAssistant, entityId: string) => { config: LovelaceCardConfig } | null;
     }[];
   }
 }
@@ -254,6 +279,16 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // An empty id renders the card's own "no entity configured" row, which is a
     // better preview than a throw from setConfig.
     return { entities: [{ entity: pick ?? '' }] };
+  }
+
+  /**
+   * The card the picker's "by entity" tab offers (HA 2026.6+), for smooth sensors
+   * only. It is the stub config for that one entity, plus the `custom:` type HA
+   * would otherwise add itself - a config returned from here is taken literally.
+   */
+  public static getEntitySuggestion(hass: HomeAssistant, entityId: string): { config: LovelaceCardConfig } | null {
+    if (!isSuggestedEntity(hass, entityId)) return null;
+    return { config: { type: `custom:${ELEMENT_NAME}`, ...BackgroundGraphEntities.getStubConfig(hass, [entityId]) } };
   }
 
   /**
@@ -1397,6 +1432,8 @@ if (typeof window !== 'undefined') {
       description: 'A card to display entities with a background graph.',
       preview: true,
       documentationURL: 'https://github.com/timmaurice/lovelace-background-graph-entities',
+      getEntitySuggestion: (hass: HomeAssistant, entityId: string) =>
+        BackgroundGraphEntities.getEntitySuggestion(hass, entityId),
     });
   }
 }

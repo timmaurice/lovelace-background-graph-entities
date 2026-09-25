@@ -3160,6 +3160,105 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('getEntitySuggestion', () => {
+    const hook = (h: HomeAssistant, id: string) =>
+      window.customCards?.find((card) => card.type === 'background-graph-entities')?.getEntitySuggestion?.(h, id);
+    const suggest = (id: string) => hook(hass, id);
+    const addSensor = (id: string, attributes: Record<string, unknown>) => {
+      hass.states[id] = { entity_id: id, state: '21.5', attributes };
+    };
+
+    beforeEach(() => {
+      addSensor('sensor.living_room_temperature', { state_class: 'measurement', device_class: 'temperature' });
+    });
+
+    it('should suggest the card for a smooth measurement sensor', () => {
+      expect(suggest('sensor.living_room_temperature')?.config).toEqual({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.living_room_temperature' }],
+      });
+    });
+
+    it('should suggest exactly the card the picker would otherwise create', () => {
+      const { type, ...rest } = suggest('sensor.living_room_temperature')?.config ?? {};
+      expect(type).toBe('custom:background-graph-entities');
+      expect(rest).toEqual(
+        (
+          BackgroundGraphEntities as unknown as { getStubConfig(h?: HomeAssistant, ids?: string[]): unknown }
+        ).getStubConfig(hass, ['sensor.living_room_temperature']),
+      );
+    });
+
+    it('should produce a config the card accepts', () => {
+      const config = suggest('sensor.living_room_temperature')?.config;
+      expect(() => element.setConfig(config as unknown as BackgroundGraphEntitiesConfig)).not.toThrow();
+    });
+
+    it.each(['humidity', 'atmospheric_pressure', 'carbon_dioxide', 'pm25', 'pm10', 'moisture'])(
+      'should suggest the card for %s',
+      (deviceClass) => {
+        addSensor('sensor.x', { state_class: 'measurement', device_class: deviceClass });
+        expect(suggest('sensor.x')).not.toBeNull();
+      },
+    );
+
+    it('should not suggest the card outside the sensor domain', () => {
+      hass.states['input_number.temperature'] = {
+        entity_id: 'input_number.temperature',
+        state: '21',
+        attributes: { state_class: 'measurement', device_class: 'temperature' },
+      };
+      expect(suggest('input_number.temperature')).toBeNull();
+    });
+
+    it.each([undefined, 'total', 'total_increasing'])(
+      'should not suggest the card for state_class %s',
+      (stateClass) => {
+        addSensor('sensor.x', { state_class: stateClass, device_class: 'temperature' });
+        expect(suggest('sensor.x')).toBeNull();
+      },
+    );
+
+    it.each([undefined, 'power', 'current', 'energy', 'battery', 'signal_strength', 'pressure'])(
+      'should not suggest the card for device_class %s',
+      (deviceClass) => {
+        addSensor('sensor.x', { state_class: 'measurement', device_class: deviceClass });
+        expect(suggest('sensor.x')).toBeNull();
+      },
+    );
+
+    it.each(['diagnostic', 'config'])('should not suggest the card for a %s entity', (category) => {
+      hass.entities['sensor.living_room_temperature'] = {
+        entity_id: 'sensor.living_room_temperature',
+        entity_category: category as 'diagnostic' | 'config',
+      };
+      expect(suggest('sensor.living_room_temperature')).toBeNull();
+    });
+
+    it('should not suggest the card for a hidden entity', () => {
+      hass.entities['sensor.living_room_temperature'] = { entity_id: 'sensor.living_room_temperature', hidden: true };
+      expect(suggest('sensor.living_room_temperature')).toBeNull();
+    });
+
+    it('should suggest the card for a registry entry without a category', () => {
+      hass.entities['sensor.living_room_temperature'] = {
+        entity_id: 'sensor.living_room_temperature',
+        entity_category: null,
+        hidden: false,
+      };
+      expect(suggest('sensor.living_room_temperature')).not.toBeNull();
+    });
+
+    it('should return null rather than throw for missing data', () => {
+      expect(suggest('sensor.missing')).toBeNull();
+      addSensor('sensor.bare', {});
+      expect(suggest('sensor.bare')).toBeNull();
+      expect(hook({} as HomeAssistant, 'sensor.living_room_temperature')).toBeNull();
+      expect(hook(undefined as unknown as HomeAssistant, 'sensor.living_room_temperature')).toBeNull();
+      expect(suggest(undefined as unknown as string)).toBeNull();
+    });
+  });
+
   describe('getGridOptions', () => {
     const grid = (): Record<string, unknown> =>
       (element as unknown as { getGridOptions(): Record<string, unknown> }).getGridOptions();
