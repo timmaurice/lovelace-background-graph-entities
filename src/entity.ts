@@ -1,4 +1,5 @@
 import type { HassEntity, HomeAssistant } from './types.js';
+import { coerceNumber } from './utils.js';
 
 /**
  * Why an entity cannot be used, in the order the checks run. `not_configured`
@@ -50,8 +51,12 @@ export function resolveEntity(
   return { ok: true, entityId, stateObj };
 }
 
-/** Whether a state is something the card can put on a y-axis. */
+/**
+ * Whether a state is something the card can put on a y-axis. The whole string
+ * has to be a number: parseFloat read a timestamp like `2026-09-26T04:12:00+00:00`
+ * as 2026. HA writes numeric states dot-decimal, never locale-formatted.
+ */
 export function isGraphableNumber(stateObj: HassEntity): boolean {
   if (stateObj.state === 'on' || stateObj.state === 'off') return true;
-  return Number.isFinite(parseFloat(stateObj.state));
+  return coerceNumber(stateObj.state) !== undefined;
 }

@@ -263,7 +263,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
    * It used to hard-code `sun.sun`, whose state is a word and whose history is
    * therefore ungraphable - the preview showed a row and no graph at all. A
    * numeric sensor is picked instead, from the ids Home Assistant offers and
-   * otherwise from the whole state machine. `hours_to_show` is gone: it only
+   * otherwise from the whole state machine, preferring smooth measurements. `hours_to_show` is gone: it only
    * repeated the default, and a stub should carry nothing a user did not choose.
    */
   public static getStubConfig(hass?: HomeAssistant, entities?: string[]): Record<string, unknown> {
@@ -272,9 +272,19 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const candidates = entities?.length ? entities : Object.keys(hass?.states ?? {});
     const graphable = (id: string, domains?: string[]): boolean =>
       resolveEntity(hass, id, { domains, numeric: true }).ok;
+    const primaryMeasurement = (id: string): boolean => {
+      const entry = hass?.entities?.[id];
+      return hass?.states?.[id]?.attributes?.state_class === 'measurement' && !entry?.entity_category && !entry?.hidden;
+    };
 
+    // Best first: what the "by entity" tab would suggest, then any primary
+    // measurement sensor, so a diagnostic or a counter is only the last resort.
     const pick =
-      candidates.find((id) => graphable(id, ['sensor'])) ?? candidates.find((id) => graphable(id)) ?? candidates[0];
+      candidates.find((id) => isSuggestedEntity(hass, id) && graphable(id)) ??
+      candidates.find((id) => graphable(id, ['sensor']) && primaryMeasurement(id)) ??
+      candidates.find((id) => graphable(id, ['sensor'])) ??
+      candidates.find((id) => graphable(id)) ??
+      candidates[0];
 
     // An empty id renders the card's own "no entity configured" row, which is a
     // better preview than a throw from setConfig.
