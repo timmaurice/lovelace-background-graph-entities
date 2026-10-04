@@ -3070,6 +3070,31 @@ describe('BackgroundGraphEntities', () => {
       expect(names).toEqual(['A Temperature', 'Z Temperature', 'B Temperature']);
     });
 
+    it('should sort a timestamp state after every number, not as its year', async () => {
+      hass.states['sensor.next_dawn'] = {
+        entity_id: 'sensor.next_dawn',
+        state: '2026-09-26T04:58:37+00:00',
+        attributes: { friendly_name: 'Next Dawn' },
+      };
+      hass.states['sensor.power'] = {
+        entity_id: 'sensor.power',
+        state: '3000',
+        attributes: { friendly_name: 'Power' },
+      };
+      element.hass = hass;
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: ['sensor.next_dawn', 'sensor.power', 'sensor.temp_a'],
+        sort: { method: 'state', numeric: true, reverse: false },
+      });
+      await element.updateComplete;
+
+      const names = Array.from(element.shadowRoot?.querySelectorAll('.entity-name') || []).map((el) =>
+        el.textContent?.trim(),
+      );
+      expect(names).toEqual(['Z Temperature', 'Power', 'Next Dawn']);
+    });
+
     it('should sort by value taking value_source into account', async () => {
       // Setup history so that sensor.temp_a has latest=15.5, max=50 after downsampling
       // sensor.temp_b has latest=35.2, max=30 after downsampling
@@ -3604,6 +3629,38 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       expect(element.shadowRoot?.querySelector('.primary-value')?.textContent?.trim()).toBe('123 °C');
+    });
+
+    // parseFloat read anything that starts with digits as a number, so a
+    // timestamp sensor showed its year: "2,026".
+    it.each(['2026-09-26T04:58:37+00:00', '12abc'])('should show %s as text, not as a number', async (state) => {
+      hass.states['sensor.next_dawn'] = {
+        entity_id: 'sensor.next_dawn',
+        state,
+        attributes: { friendly_name: 'Next dawn' },
+      };
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.next_dawn'] });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.primary-value')?.textContent?.trim()).toBe(state);
+    });
+
+    it('should show a companion timestamp as text, even with a display precision', async () => {
+      hass.states['sensor.next_dawn'] = {
+        entity_id: 'sensor.next_dawn',
+        state: '2026-09-26T04:58:37+00:00',
+        attributes: { friendly_name: 'Next dawn' },
+      };
+      hass.entities['sensor.next_dawn'] = { entity_id: 'sensor.next_dawn', display_precision: 0 };
+      element.setConfig({
+        type: 'custom:background-graph-entities',
+        entities: [{ entity: 'sensor.test', extra_value_entity: 'sensor.next_dawn' }],
+      });
+      element.hass = hass;
+      await element.updateComplete;
+
+      expect(element.shadowRoot?.querySelector('.extra-value')?.textContent?.trim()).toBe('2026-09-26T04:58:37+00:00');
     });
   });
 
