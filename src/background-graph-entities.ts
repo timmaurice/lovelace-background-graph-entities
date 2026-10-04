@@ -555,7 +555,9 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     entityConfig: EntityConfig,
     stateObj: HassEntity,
   ): { num: number; str: string; broken: boolean; canUseValueSource: boolean } {
-    const stateNum = parseFloat(stateObj.state);
+    // The whole state has to be a number: parseFloat read a timestamp like
+    // `2026-09-26T04:58:37+00:00` as 2026 and the row showed "2,026".
+    const stateNum = coerceNumber(stateObj.state) ?? NaN;
     const isBooleanState = stateObj.state === 'on' || stateObj.state === 'off';
     // value_source only applies for numeric entities whose graph shares the same
     // entity — otherwise max/min would be over a different series.
@@ -665,11 +667,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
         }
 
         if (numeric) {
-          const numA = typeof valA === 'number' ? valA : parseFloat(valA);
-          const numB = typeof valB === 'number' ? valB : parseFloat(valB);
+          const numA = coerceNumber(valA);
+          const numB = coerceNumber(valB);
 
-          const isNumA = !isNaN(numA);
-          const isNumB = !isNaN(numB);
+          const isNumA = numA !== undefined;
+          const isNumB = numB !== undefined;
 
           if (isNumA && isNumB) {
             comparison = numA - numB;
@@ -759,7 +761,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       if (specialState) {
         value = specialState;
       } else {
-        const stateNum = parseFloat(stateObj.state);
+        const stateNum = coerceNumber(stateObj.state) ?? NaN;
         const transform = this._getCompiledTransform(transformExpr, entityId);
         const transformedNum = transform ? transform(stateNum) : stateNum;
         // Same fail-safe as the main value: a broken transform falls back to
@@ -806,7 +808,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // Lets _renderAllGraphs resolve THIS row's config even when the same entity
     // appears in several rows (reference identity, so duplicates resolve too).
     const entityIndex = this._entities.indexOf(entityConfig);
-    const stateNum = parseFloat(stateObj.state);
+    const stateNum = coerceNumber(stateObj.state) ?? NaN;
     let displayValue: string;
     const isBooleanState = stateObj.state === 'on' || stateObj.state === 'off';
     const domain = entityConfig.entity.split('.')[0];
