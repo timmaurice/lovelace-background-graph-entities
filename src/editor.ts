@@ -257,7 +257,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
   private _entitySwitchChanged(ev: Event): void {
     const target = ev.target as HTMLInputElement;
-    const index = Number((target as HTMLElement).dataset.index);
+    const index = Number(target.dataset.index);
     const field = target.dataset.field as keyof EntityConfig;
 
     if (isNaN(index) || !field) return;
@@ -275,7 +275,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   // string = custom label), so switching off deletes it instead of writing a no-op `false`.
   private _extraValueUseEntityNameChanged(ev: Event): void {
     const target = ev.target as HTMLInputElement;
-    const index = Number((target as HTMLElement).dataset.index);
+    const index = Number(target.dataset.index);
     if (isNaN(index)) return;
 
     const useEntityName = target.checked;
@@ -295,8 +295,8 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
   // string = override), so switching off deletes it and restores the entity's unit.
   private _unitHiddenChanged(ev: Event): void {
     const target = ev.target as HTMLInputElement;
-    const index = Number((target as HTMLElement).dataset.index);
-    const field = (target as HTMLElement).dataset.field as 'value_unit' | 'extra_value_unit';
+    const index = Number(target.dataset.index);
+    const field = target.dataset.field as 'value_unit' | 'extra_value_unit';
     if (isNaN(index) || !field) return;
 
     const hidden = target.checked;
@@ -489,7 +489,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
 
   private _overwriteAppearanceChanged(ev: Event): void {
     const target = ev.target as HTMLInputElement;
-    const index = Number((target as HTMLElement).dataset.index);
+    const index = Number(target.dataset.index);
     if (isNaN(index)) return;
 
     const isChecked = target.checked;
@@ -583,23 +583,21 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           @value-changed=${this._entityAttributeChanged}
         ></ha-icon-picker>
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
-          <ha-switch
-            .checked=${entityConf.show_icon !== false}
-            data-index=${this._editingIndex}
-            data-field="show_icon"
-            @change=${this._entitySwitchChanged}
-          ></ha-switch>
-        </ha-formfield>
+        <ha-switch
+          .checked=${entityConf.show_icon !== false}
+          data-index=${this._editingIndex}
+          data-field="show_icon"
+          @change=${this._entitySwitchChanged}
+          >${localize(this.hass, 'component.bge.editor.show_icon')}</ha-switch
+        >
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.auto_icon_color')}>
-          <ha-switch
-            .checked=${entityConf.auto_icon_color === true}
-            data-index=${this._editingIndex}
-            data-field="auto_icon_color"
-            @change=${this._entitySwitchChanged}
-          ></ha-switch>
-        </ha-formfield>
+        <ha-switch
+          .checked=${entityConf.auto_icon_color === true}
+          data-index=${this._editingIndex}
+          data-field="auto_icon_color"
+          @change=${this._entitySwitchChanged}
+          >${localize(this.hass, 'component.bge.editor.auto_icon_color')}</ha-switch
+        >
 
         <!-- The two are mutually exclusive: with auto colour on, icon_color is only a
              fallback until history arrives and was already read-only, so showing it
@@ -683,14 +681,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                 `
           }
         </div>
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.value_unit_hide')}>
-          <ha-switch
-            .checked=${entityConf.value_unit === false}
-            data-index=${this._editingIndex}
-            data-field="value_unit"
-            @change=${this._unitHiddenChanged}
-          ></ha-switch>
-        </ha-formfield>
+        <ha-switch
+          .checked=${entityConf.value_unit === false}
+          data-index=${this._editingIndex}
+          data-field="value_unit"
+          @change=${this._unitHiddenChanged}
+          >${localize(this.hass, 'component.bge.editor.value_unit_hide')}</ha-switch
+        >
 
         ${
           valueSourceAvailable
@@ -747,13 +744,12 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             ${
               entityConf.extra_value_entity
                 ? html`
-                    <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_use_entity_name')}>
-                      <ha-switch
-                        .checked=${entityConf.extra_value_name === true}
-                        data-index=${this._editingIndex}
-                        @change=${this._extraValueUseEntityNameChanged}
-                      ></ha-switch>
-                    </ha-formfield>
+                    <ha-switch
+                      .checked=${entityConf.extra_value_name === true}
+                      data-index=${this._editingIndex}
+                      @change=${this._extraValueUseEntityNameChanged}
+                      >${localize(this.hass, 'component.bge.editor.extra_value_use_entity_name')}</ha-switch
+                    >
                     ${
                       entityConf.extra_value_name === true
                         ? ''
@@ -799,14 +795,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                             `
                       }
                     </div>
-                    <ha-formfield .label=${localize(this.hass, 'component.bge.editor.extra_value_unit_hide')}>
-                      <ha-switch
-                        .checked=${entityConf.extra_value_unit === false}
-                        data-index=${this._editingIndex}
-                        data-field="extra_value_unit"
-                        @change=${this._unitHiddenChanged}
-                      ></ha-switch>
-                    </ha-formfield>
+                    <ha-switch
+                      .checked=${entityConf.extra_value_unit === false}
+                      data-index=${this._editingIndex}
+                      data-field="extra_value_unit"
+                      @change=${this._unitHiddenChanged}
+                      >${localize(this.hass, 'component.bge.editor.extra_value_unit_hide')}</ha-switch
+                    >
                   `
                 : ''
             }
@@ -832,25 +827,23 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             ${
               entityConf.graph_entity
                 ? html`
-                    <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}>
-                      <ha-switch
-                        .checked=${entityConf.show_graph_entity_state === true}
-                        data-index=${this._editingIndex}
-                        data-field="show_graph_entity_state"
-                        @change=${this._entitySwitchChanged}
-                      ></ha-switch>
-                    </ha-formfield>
+                    <ha-switch
+                      .checked=${entityConf.show_graph_entity_state === true}
+                      data-index=${this._editingIndex}
+                      data-field="show_graph_entity_state"
+                      @change=${this._entitySwitchChanged}
+                      >${localize(this.hass, 'component.bge.editor.show_graph_entity_state')}</ha-switch
+                    >
                   `
                 : ''
             }
 
-            <ha-formfield .label=${localize(this.hass, 'component.bge.editor.optional_overrides')}>
-              <ha-switch
-                .checked=${overwriteAppearance}
-                data-index=${this._editingIndex}
-                @change=${this._overwriteAppearanceChanged}
-              ></ha-switch>
-            </ha-formfield>
+            <ha-switch
+              .checked=${overwriteAppearance}
+              data-index=${this._editingIndex}
+              @change=${this._overwriteAppearanceChanged}
+              >${localize(this.hass, 'component.bge.editor.optional_overrides')}</ha-switch
+            >
 
             ${overwriteAppearance ? this._renderEntityGraphAppearanceEditor(this._editingIndex) : ''}
           </div>
@@ -1078,35 +1071,29 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             @change=${this._valueChanged}
           ></ha-input>
         </div>
-        <div class="formfield-with-help">
-          <ha-formfield .label=${localize(this.hass, 'component.bge.editor.average_in_title')}>
-            <ha-switch
-              .checked=${this._config.average_in_title === true}
-              .configValue=${'average_in_title'}
-              @change=${this._valueChanged}
-            ></ha-switch>
-          </ha-formfield>
-          <div class="tooltip-container">
-            <ha-icon class="help-icon" icon="mdi:help-circle-outline"></ha-icon>
-            <div class="tooltip-content">${localize(this.hass, 'component.bge.editor.average_in_title_helper')}</div>
-          </div>
+        <div>
+          <ha-switch
+            .checked=${this._config.average_in_title === true}
+            .configValue=${'average_in_title'}
+            @change=${this._valueChanged}
+            >${localize(this.hass, 'component.bge.editor.average_in_title')}</ha-switch
+          >
+          <div class="switch-helper">${localize(this.hass, 'component.bge.editor.average_in_title_helper')}</div>
         </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.layout')}</h3>
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.tile_style')}>
-          <ha-switch
-            .checked=${this._config.tile_style === true}
-            .configValue=${'tile_style'}
-            @change=${this._valueChanged}
-          ></ha-switch>
-        </ha-formfield>
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_icon')}>
-          <ha-switch
-            .checked=${this._config.show_icon !== false}
-            .configValue=${'show_icon'}
-            @change=${this._valueChanged}
-          ></ha-switch>
-        </ha-formfield>
+        <ha-switch
+          .checked=${this._config.tile_style === true}
+          .configValue=${'tile_style'}
+          @change=${this._valueChanged}
+          >${localize(this.hass, 'component.bge.editor.tile_style')}</ha-switch
+        >
+        <ha-switch
+          .checked=${this._config.show_icon !== false}
+          .configValue=${'show_icon'}
+          @change=${this._valueChanged}
+          >${localize(this.hass, 'component.bge.editor.show_icon')}</ha-switch
+        >
 
         <h3>${localize(this.hass, 'component.bge.editor.graph_appearance')}</h3>
         <div class="side-by-side">
@@ -1164,21 +1151,13 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
           </div>
         </div>
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.line_glow')}>
-          <ha-switch
-            .checked=${this._config.line_glow === true}
-            .configValue=${'line_glow'}
-            @change=${this._valueChanged}
-          ></ha-switch>
-        </ha-formfield>
+        <ha-switch .checked=${this._config.line_glow === true} .configValue=${'line_glow'} @change=${this._valueChanged}
+          >${localize(this.hass, 'component.bge.editor.line_glow')}</ha-switch
+        >
 
-        <ha-formfield .label=${localize(this.hass, 'component.bge.editor.show_gaps')}>
-          <ha-switch
-            .checked=${this._config.show_gaps === true}
-            .configValue=${'show_gaps'}
-            @change=${this._valueChanged}
-          ></ha-switch>
-        </ha-formfield>
+        <ha-switch .checked=${this._config.show_gaps === true} .configValue=${'show_gaps'} @change=${this._valueChanged}
+          >${localize(this.hass, 'component.bge.editor.show_gaps')}</ha-switch
+        >
 
         ${this._renderGraphBoundsEditor(this._config, this._valueChanged)}
 
@@ -1319,7 +1298,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
         }
 
         <h3>${localize(this.hass, 'component.bge.editor.sorting')}</h3>
-        <div class="side-by-side">
+        <div class="sort-group">
           <div class="dropdown-wrapper">
             <ha-select
               .label=${localize(this.hass, 'component.bge.editor.sort_method')}
@@ -1336,24 +1315,20 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
             >
             </ha-select>
           </div>
-          <ha-formfield .label=${localize(this.hass, 'component.bge.editor.sort_reverse')}>
-            <ha-switch
-              .checked=${this._config.sort?.reverse === true}
-              .configValue=${'sort_reverse'}
-              .disabled=${this._config.sort?.method === 'none' || !this._config.sort?.method}
-              @change=${this._sortValueChanged}
-            ></ha-switch>
-          </ha-formfield>
-        </div>
-        <div class="side-by-side margin-bottom">
-          <ha-formfield .label=${localize(this.hass, 'component.bge.editor.sort_numeric')}>
-            <ha-switch
-              .checked=${this._config.sort?.numeric !== false}
-              .configValue=${'sort_numeric'}
-              .disabled=${this._config.sort?.method === 'none' || !this._config.sort?.method}
-              @change=${this._sortValueChanged}
-            ></ha-switch>
-          </ha-formfield>
+          <ha-switch
+            .checked=${this._config.sort?.reverse === true}
+            .configValue=${'sort_reverse'}
+            .disabled=${this._config.sort?.method === 'none' || !this._config.sort?.method}
+            @change=${this._sortValueChanged}
+            >${localize(this.hass, 'component.bge.editor.sort_reverse')}</ha-switch
+          >
+          <ha-switch
+            .checked=${this._config.sort?.numeric !== false}
+            .configValue=${'sort_numeric'}
+            .disabled=${this._config.sort?.method === 'none' || !this._config.sort?.method}
+            @change=${this._sortValueChanged}
+            >${localize(this.hass, 'component.bge.editor.sort_numeric')}</ha-switch
+          >
         </div>
 
         <h3>${localize(this.hass, 'component.bge.editor.data_settings')}</h3>
@@ -1409,6 +1384,7 @@ export class BackgroundGraphEntitiesEditor extends LitElement implements Lovelac
                       @mousedown=${(e: MouseEvent) => e.stopPropagation()}
                       @value-changed=${this._entityAttributeChanged}
                       allow-custom-entity
+                      hide-clear-icon
                     ></ha-entity-picker>
                     <ha-icon-button
                       class="edit-icon"

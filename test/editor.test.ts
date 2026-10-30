@@ -46,6 +46,12 @@ describe('BackgroundGraphEntitiesEditor', () => {
     element.dispatchEvent(new Event('change'));
   };
 
+  /** What ha-switch does on a click: flip `checked`, then fire `change`. */
+  const toggle = (element: EditorInput, checked: boolean): void => {
+    element.checked = checked;
+    element.dispatchEvent(new Event('change'));
+  };
+
   beforeEach(async () => {
     hass = {
       states: {
@@ -196,6 +202,24 @@ describe('BackgroundGraphEntitiesEditor', () => {
       await editor.updateComplete;
     });
 
+    it('switches per-entity flags', () => {
+      const toggleEl = fieldByDataField('auto_icon_color');
+      expect(toggleEl.tagName.toLowerCase()).toBe('ha-switch');
+      toggle(toggleEl, true);
+      expect(lastConfig().entities[0]).toEqual({ entity: 'sensor.test', auto_icon_color: true });
+    });
+
+    it('hides and restores the unit', async () => {
+      // The unit text field shares data-field="value_unit", so ask for the switch itself.
+      const unitToggle = (): EditorInput =>
+        editor.shadowRoot!.querySelector<EditorInput>('ha-switch[data-field="value_unit"]') as EditorInput;
+      toggle(unitToggle(), true);
+      expect(lastConfig().entities[0]).toEqual({ entity: 'sensor.test', value_unit: false });
+      await editor.updateComplete;
+      toggle(unitToggle(), false);
+      expect(lastConfig().entities[0]).toEqual({ entity: 'sensor.test' });
+    });
+
     it('trims what the user typed', () => {
       const input = fieldByDataField('name');
       input.dataset.index = '0';
@@ -301,6 +325,16 @@ describe('BackgroundGraphEntitiesEditor', () => {
       sortChange('sort_method', 'name');
       sortChange('sort_method', 'none');
       expect(lastConfig()).not.toHaveProperty('sort');
+    });
+
+    it('labels each switch through its slot, without ha-formfield', async () => {
+      await editor.updateComplete;
+      const toggleEl = field('tile_style');
+      expect(toggleEl.tagName.toLowerCase()).toBe('ha-switch');
+      expect(toggleEl.textContent?.trim()).toBe('More Compact Tile Style');
+      expect(editor.shadowRoot!.querySelector('ha-formfield')).toBeNull();
+      toggle(toggleEl, true);
+      expect(lastConfig().tile_style).toBe(true);
     });
 
     it('stores only the non-default numeric flag', () => {

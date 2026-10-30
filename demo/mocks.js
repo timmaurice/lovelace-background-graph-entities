@@ -180,11 +180,11 @@ class HaSwitch extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>
-        :host { display: inline-flex; align-items: center; cursor: pointer; padding: 4px; vertical-align: middle; }
+        :host { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px; vertical-align: middle; font-size: 14px; }
         .switch-container { position: relative; width: 36px; height: 14px; background: ${trackBg}; border-radius: 7px; transition: background 0.28s; opacity: ${isChecked ? 0.5 : 1}; }
         .thumb { position: absolute; top: -3px; left: -1px; width: 20px; height: 20px; background: ${thumbBg}; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.4); transition: transform 0.28s; ${thumbTransform} }
       </style>
-      <div class="switch-container"><div class="thumb"></div></div>
+      <div class="switch-container"><div class="thumb"></div></div><slot></slot>
     `;
     this.shadowRoot.querySelector('.switch-container').onclick = (e) => {
       e.stopPropagation();
@@ -531,27 +531,6 @@ class HaSelect extends HTMLElement {
   }
 }
 if (!customElements.get('ha-select')) customElements.define('ha-select', HaSelect);
-
-class HaFormfield extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: 'open' });
-  }
-  set label(val) {
-    this._label = val;
-    this.render();
-  }
-  connectedCallback() {
-    this.render();
-  }
-  render() {
-    this.shadowRoot.innerHTML = `
-      <style>label { display: flex; align-items: center; font-family: inherit; font-size: 14px; gap: 8px; padding: 4px 0; }</style>
-      <label><slot></slot> ${this._label || ''}</label>
-    `;
-  }
-}
-if (!customElements.get('ha-formfield')) customElements.define('ha-formfield', HaFormfield);
 
 class HaButton extends HTMLElement {
   constructor() {

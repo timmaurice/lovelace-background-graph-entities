@@ -22,11 +22,13 @@ const sources = sourceFiles(join(root, 'src')).map((path) => ({
   text: readFileSync(path, 'utf8'),
 }));
 
-// Gone from the frontend as of tag 20260826.7. `ha-radio` is exact: `ha-radio-group`,
-// `ha-radio-option` and `ha-radio-list-item` still exist. mwc-* and paper-* are only HA's
-// internal base classes, if present at all, and never registered for cards to rely on.
+// Gone from the frontend as of tag 20260826.7, `ha-formfield` as of 20261028.0 (HA 2026.11).
+// `ha-radio` is exact: `ha-radio-group`, `ha-radio-option` and `ha-radio-list-item` still exist.
+// mwc-* and paper-* are only HA's internal base classes, if present at all, and never registered
+// for cards to rely on.
 const REMOVED = [
   'ha-circular-progress',
+  'ha-formfield',
   'ha-textfield',
   'ha-fab',
   'ha-radio',

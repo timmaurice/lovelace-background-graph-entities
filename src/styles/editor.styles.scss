@@ -17,10 +17,6 @@
 .side-by-side {
   display: flex;
   gap: 16px;
-
-  &.margin-bottom {
-    margin-bottom: 16px;
-  }
 }
 
 .side-by-side > * {
@@ -31,6 +27,24 @@
   margin-top: 8px;
 }
 
+// The sort method with its two options directly beneath it, so they read as one group.
+.sort-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  > .dropdown-wrapper {
+    margin: 0 0 4px;
+  }
+}
+
+// ha-switch draws its own label from the slot (HA 2026.5+); this is the hint line beneath one.
+.switch-helper {
+  color: var(--secondary-text-color);
+  font-size: var(--ha-font-size-s, 12px);
+  margin: 4px 0 0 56px;
+}
+
 // In a side-by-side row that margin only offsets the select against the plain
 // field next to it, so the two columns start 8px apart. Standalone dropdowns
 // keep it.
@@ -39,6 +53,7 @@
 }
 
 .entities-container {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -73,8 +88,16 @@
   cursor: move;
 }
 
+// Without min-width: 0 the picker keeps the width of its longest name, and on a
+// narrow screen it pushes the edit and remove buttons out of the row.
+.drag-handle,
+.entity-main ha-icon-button {
+  flex-shrink: 0;
+}
+
 .entity-content {
-  flex-grow: 1;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .entity-main {
@@ -84,7 +107,26 @@
 }
 
 .entity-main ha-entity-picker {
-  flex-grow: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// Phone width: smaller buttons and gaps leave the room to the entity name. After the
+// base rules, which would win otherwise.
+@container (max-width: 400px) {
+  .entity-container {
+    gap: 4px;
+    padding: 4px 4px 4px 0;
+  }
+
+  .entity-main {
+    gap: 0;
+  }
+
+  .entity-main ha-icon-button {
+    --ha-icon-button-size: 40px;
+    --mdc-icon-button-size: 40px;
+  }
 }
 
 ha-slider {
@@ -237,83 +279,4 @@ h3 {
 .dropdown-textfield {
   pointer-events: none; /* Let the wrapper consume the click event to open the dropdown */
   width: 100%;
-}
-
-.formfield-with-help {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-
-  .tooltip-container {
-    display: inline-flex;
-    position: relative;
-
-    .help-icon {
-      --mdc-icon-size: 18px;
-      color: var(--secondary-text-color);
-      cursor: help;
-    }
-
-    .tooltip-content {
-      background-color: var(
-        --card-background-color,
-        var(--paper-card-background-color, var(--primary-background-color))
-      );
-      border: 1px solid var(--divider-color);
-      border-radius: 4px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      color: var(--primary-text-color);
-      font-size: 12px;
-      font-weight: normal;
-      line-height: 1.4;
-      opacity: 0;
-      padding: 8px 12px;
-      pointer-events: none;
-      position: absolute;
-      left: 50%;
-      top: calc(100% + 10px);
-      transition:
-        opacity 0.2s ease-in-out,
-        transform 0.2s ease-in-out;
-      transform: translateX(-50%) translateY(-4px);
-      width: 240px;
-      z-index: 100;
-      white-space: normal;
-
-      &::after,
-      &::before {
-        bottom: 100%;
-        left: 50%;
-        border: solid transparent;
-        content: ' ';
-        height: 0;
-        width: 0;
-        position: absolute;
-        pointer-events: none;
-      }
-
-      &::after {
-        border-color: rgba(255, 255, 255, 0);
-        border-bottom-color: var(
-          --card-background-color,
-          var(--paper-card-background-color, var(--primary-background-color))
-        );
-        border-width: 6px;
-        margin-left: -6px;
-      }
-
-      &::before {
-        border-color: rgba(255, 255, 255, 0);
-        border-bottom-color: var(--divider-color);
-        border-width: 7px;
-        margin-left: -7px;
-      }
-    }
-
-    &:hover .tooltip-content {
-      opacity: 1;
-      pointer-events: auto;
-      transform: translateX(-50%) translateY(0);
-    }
-  }
 }
