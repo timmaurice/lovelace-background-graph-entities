@@ -1,6 +1,6 @@
 services:
   homeassistant:
-    image: homeassistant/home-assistant:stable
+    image: homeassistant/home-assistant:2026.11.1
     container_name: ha-background-graph-entities-test
     ports:
       - '8127:8123'
