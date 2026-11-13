@@ -510,6 +510,32 @@ describe('BackgroundGraphEntities', () => {
 
       expect(internals._history.get('sensor.test')?.raw[0].value).toBe(5);
     });
+
+    it('should ignore a stale history response that arrives after a newer one', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': [{ lu: 1_700_000_000, s: '1' }] });
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      type Internals = {
+        _history: Map<string, { raw: { value: number }[] }>;
+        _fetchAndStoreAllHistory: () => Promise<void>;
+      };
+      const internals = element as unknown as Internals;
+
+      let resolveOld: (v: unknown) => void = () => {};
+      (hass.callWS as Mock).mockImplementationOnce(() => new Promise((r) => (resolveOld = r)));
+      const oldFetch = internals._fetchAndStoreAllHistory();
+
+      (hass.callWS as Mock).mockResolvedValueOnce({ 'sensor.test': [{ lu: 1_700_000_000, s: '9' }] });
+      await internals._fetchAndStoreAllHistory();
+      expect(internals._history.get('sensor.test')?.raw[0].value).toBe(9);
+
+      resolveOld({ 'sensor.test': [{ lu: 1_700_000_000, s: '2' }] });
+      await oldFetch;
+      expect(internals._history.get('sensor.test')?.raw[0].value).toBe(9);
+    });
   });
 
   describe('History refresh interval', () => {

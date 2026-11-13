@@ -141,6 +141,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
   @state() private _config!: BackgroundGraphEntitiesConfig;
   @state() private _entities: EntityConfig[] = [];
   @state() private _history: HistoryMap = new Map();
+  // Sequence number of the latest history request; older responses are dropped.
+  private _historyRequestSeq = 0;
   private _historyFetched = false;
   // The history-relevant slice of the config, so an unrelated edit does not
   // throw away data that is still correct.
@@ -1266,6 +1268,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
 
   private async _fetchAndStoreAllHistory(): Promise<void> {
     if (this._entities.length === 0) {
+      // Invalidate any request still in flight.
+      this._historyRequestSeq++;
       if (this._history.size > 0) this._history = new Map();
       return;
     }
@@ -1274,7 +1278,11 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // de-duplicated first: a 60-row card used to issue 60 websocket calls for
     // what the recorder answers in one.
     const entityIds = [...new Set(this._entities.map((conf) => conf.graph_entity || conf.entity).filter(Boolean))];
+    const seq = ++this._historyRequestSeq;
     const history = await this._fetchHistory(entityIds);
+    // A response that arrives after a newer request was started belongs to an
+    // outdated window/config and must not overwrite the newer data.
+    if (seq !== this._historyRequestSeq) return;
     // A failed fetch keeps the last good data instead of blanking every graph
     // until the next interval.
     if (history) this._history = history;
