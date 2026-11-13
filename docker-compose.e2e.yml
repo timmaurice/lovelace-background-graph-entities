@@ -4,10 +4,11 @@ services:
       context: .
       dockerfile: Dockerfile.e2e
     volumes:
-      # Mount the tests and source so we don't need to rebuild docker if we only change tests
+      # Only tests and reports are mounted. Do NOT mount ./src or ./dist: the suite must
+      # run against the bundle built inside the image (`RUN npm run build`), which
+      # `up --build` rebuilds whenever the source changes. A ./dist mount would shadow it
+      # with a stale (or missing) host bundle.
       - ./test/e2e:/app/test/e2e
-      - ./src:/app/src
-      - ./dist:/app/dist
       - ./playwright-report:/app/playwright-report
     environment:
       - CI=1
