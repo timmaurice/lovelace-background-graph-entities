@@ -2,7 +2,16 @@ import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BASE_URL, PASSWORD, USERNAME, ensureRunning, saveTokens, waitForFrontend } from './helpers/homeassistant';
+import {
+  BASE_URL,
+  PASSWORD,
+  USERNAME,
+  ensureBundleResource,
+  ensureOnboarded,
+  ensureRunning,
+  saveTokens,
+  waitForFrontend,
+} from './helpers/homeassistant';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -19,6 +28,7 @@ export default async function globalSetup(): Promise<void> {
   execFileSync('npm', ['run', 'build'], { cwd: REPO_ROOT, stdio: 'inherit' });
   ensureRunning();
   await waitForFrontend();
+  await ensureOnboarded();
 
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -42,6 +52,7 @@ export default async function globalSetup(): Promise<void> {
       { timeout: 30_000 },
     );
     saveTokens(await tokens.jsonValue());
+    await ensureBundleResource();
     await page.context().storageState({ path: 'test/ha-e2e/.storage-state.json' });
   } finally {
     await browser.close();

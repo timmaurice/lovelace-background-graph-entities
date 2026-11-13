@@ -1,11 +1,13 @@
 /**
- * Talks to the Home Assistant the repository's docker-compose already provides.
+ * Talks to the Home Assistant the repository's docker-compose provides.
  *
- * The suite deliberately reuses that instance instead of booting one of its
- * own: it is already onboarded and serves `dist/` as a Lovelace resource, which
- * is what makes an end-to-end assertion worth more than a mock. Everything the
- * suite writes goes into a dashboard of its own, so the manual playground stays
- * intact.
+ * The suite deliberately uses that instance instead of booting one of its own:
+ * it serves `dist/` as `/local/background-graph-entities/`, which is what makes
+ * an end-to-end assertion worth more than a mock. A fresh clone has no
+ * `ha-config/`, so global setup onboards the instance and registers the bundle
+ * as a Lovelace resource itself (see `ensureOnboarded` / `ensureBundleResource`);
+ * an instance that is already set up is left alone. Everything the suite writes
+ * goes into a dashboard of its own, so a manual playground stays intact.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -48,6 +50,68 @@ export async function waitForFrontend(timeoutMs = 180_000): Promise<void> {
     await new Promise((r) => setTimeout(r, 2000));
   }
   throw new Error(`Home Assistant did not answer at ${BASE_URL} within ${timeoutMs}ms`);
+}
+
+/** Same value the frontend uses as OAuth client id: the instance's own origin. */
+const CLIENT_ID = `${BASE_URL}/`;
+
+/**
+ * Onboards a brand new Home Assistant (no `ha-config/` yet) through the same
+ * REST API the onboarding page uses, so a clean checkout needs no committed
+ * `.storage`. Does nothing when onboarding is already finished.
+ */
+export async function ensureOnboarded(): Promise<void> {
+  const status = await fetch(`${BASE_URL}/api/onboarding`);
+  // 404: onboarding endpoint is gone once every step is done.
+  if (status.status === 404) return;
+  const steps = (await status.json()) as { step: string; done: boolean }[];
+  const pending = (name: string) => steps.some((s) => s.step === name && !s.done);
+
+  const json = (body: unknown, token?: string): RequestInit => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+
+  let token: string | undefined;
+  if (pending('user')) {
+    const res = await fetch(
+      `${BASE_URL}/api/onboarding/users`,
+      json({ client_id: CLIENT_ID, name: 'Admin', username: USERNAME, password: PASSWORD, language: 'en' }),
+    );
+    if (!res.ok) throw new Error(`onboarding user step failed: ${res.status} ${await res.text()}`);
+    const { auth_code } = (await res.json()) as { auth_code: string };
+    const tokenRes = await fetch(`${BASE_URL}/auth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: auth_code, client_id: CLIENT_ID }),
+    });
+    if (!tokenRes.ok) throw new Error(`onboarding token exchange failed: ${tokenRes.status}`);
+    token = ((await tokenRes.json()) as { access_token: string }).access_token;
+  }
+  if (!token) throw new Error('Onboarding is partly done and no user token is available; remove ha-config/.');
+
+  for (const [step, body] of [
+    ['core_config', {}],
+    ['analytics', {}],
+    ['integration', { client_id: CLIENT_ID, redirect_uri: CLIENT_ID }],
+  ] as const) {
+    if (!pending(step)) continue;
+    const res = await fetch(`${BASE_URL}/api/onboarding/${step}`, json(body, token));
+    if (!res.ok) throw new Error(`onboarding step ${step} failed: ${res.status} ${await res.text()}`);
+  }
+}
+
+/** Registers the built bundle as a Lovelace resource unless the instance has it already. */
+export async function ensureBundleResource(): Promise<void> {
+  const prefix = '/local/background-graph-entities/';
+  const existing = await resources();
+  if (existing.some((r) => r.url.startsWith(prefix))) return;
+  await callWebsocket({
+    type: 'lovelace/resources/create',
+    res_type: 'module',
+    url: `${prefix}background-graph-entities.js`,
+  });
 }
 
 export interface Tokens {
