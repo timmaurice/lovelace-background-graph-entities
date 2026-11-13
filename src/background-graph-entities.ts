@@ -1274,10 +1274,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // de-duplicated first: a 60-row card used to issue 60 websocket calls for
     // what the recorder answers in one.
     const entityIds = [...new Set(this._entities.map((conf) => conf.graph_entity || conf.entity).filter(Boolean))];
-    this._history = await this._fetchHistory(entityIds);
+    const history = await this._fetchHistory(entityIds);
+    // A failed fetch keeps the last good data instead of blanking every graph
+    // until the next interval.
+    if (history) this._history = history;
   }
 
-  private async _fetchHistory(entityIds: string[]): Promise<HistoryMap> {
+  private async _fetchHistory(entityIds: string[]): Promise<HistoryMap | null> {
     const result: HistoryMap = new Map();
     if (!this.hass?.callWS || entityIds.length === 0) return result;
 
@@ -1326,6 +1329,7 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       }
     } catch (err) {
       console.error(`Error fetching history for ${entityIds.join(', ')}:`, err);
+      return null;
     }
     return result;
   }
