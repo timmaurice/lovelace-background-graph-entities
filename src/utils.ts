@@ -89,8 +89,12 @@ export function downsampleHistory(
   }
 
   const downsampled: { timestamp: Date; value: number }[] = [];
-  // The first state is guaranteed by `include_start_time_state: true` to be the value at the start of the window.
-  let lastValue = states[0].value;
+  // `include_start_time_state: true` makes the first state the value at the start
+  // of the window - unless the entity did not exist yet or the recorder has no data
+  // that far back. Then the first state lies inside the window and everything before
+  // it is unknown, so leading buckets stay NaN (a gap) instead of an invented line.
+  const startsBeforeData = states[0].timestamp.getTime() > windowStart;
+  let lastValue = startsBeforeData ? NaN : states[0].value;
   // States arrive sorted, so the carry-forward value only ever moves forward -
   // a cursor replaces the per-bucket scan the old code did over all states.
   let cursor = 0;
@@ -125,7 +129,7 @@ export function downsampleHistory(
   }
 
   // Add a point at the very beginning to anchor the graph.
-  downsampled.unshift({ timestamp: new Date(windowStart), value: states[0].value });
+  downsampled.unshift({ timestamp: new Date(windowStart), value: startsBeforeData ? NaN : states[0].value });
 
   return downsampled;
 }
