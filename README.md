@@ -394,6 +394,15 @@ To contribute to the development, you'll need to set up a build environment.
     npx playwright test
     ```
 
+    The second suite drives a real Home Assistant (`docker-compose.yml`, port 8127). It works from a
+    fresh clone with one command: it builds the bundle, starts the container, onboards the instance
+    (user `admin` / `password`), registers the bundle as a Lovelace resource and runs the specs.
+    It also runs in CI (job `e2e`). Needs Docker:
+
+    ```bash
+    npm run test:e2e:ha
+    ```
+
 7.  **Interactive Demo:**
     You can view a fully interactive visual demo of the component featuring all layouts, overrides, and toggles without running a Home Assistant instance!
 
