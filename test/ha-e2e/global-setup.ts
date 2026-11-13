@@ -1,5 +1,6 @@
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -25,6 +26,11 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
  * is rebuilt first - otherwise the suite would grade yesterday's code.
  */
 export default async function globalSetup(): Promise<void> {
+  // A fresh checkout has no Playwright browser; fetch it instead of dying
+  // halfway through (after the instance is already half onboarded).
+  if (!existsSync(chromium.executablePath())) {
+    execFileSync('npx', ['playwright', 'install', 'chromium'], { cwd: REPO_ROOT, stdio: 'inherit' });
+  }
   execFileSync('npm', ['run', 'build'], { cwd: REPO_ROOT, stdio: 'inherit' });
   ensureRunning();
   await waitForFrontend();
