@@ -488,6 +488,28 @@ describe('BackgroundGraphEntities', () => {
       expect(history.get('sensor.test')?.raw[0].value).toBe(1);
       expect(history.get('sensor.second')?.raw[0].value).toBe(2);
     });
+
+    it('should keep the previous history when a refresh fails', async () => {
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': [{ lu: 1_700_000_000, s: '5' }] });
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'] });
+      await element.updateComplete;
+      await element.updateComplete;
+
+      type Internals = {
+        _history: Map<string, { raw: { value: number }[] }>;
+        _fetchAndStoreAllHistory: () => Promise<void>;
+      };
+      const internals = element as unknown as Internals;
+      expect(internals._history.get('sensor.test')?.raw[0].value).toBe(5);
+
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      (hass.callWS as Mock).mockRejectedValue(new Error('ws down'));
+      await internals._fetchAndStoreAllHistory();
+      errorSpy.mockRestore();
+
+      expect(internals._history.get('sensor.test')?.raw[0].value).toBe(5);
+    });
   });
 
   describe('History refresh interval', () => {
