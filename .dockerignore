@@ -5,3 +5,6 @@ node_modules
 playwright-report
 test-results
 test/e2e/screenshots
+ha-config
+test/ha-e2e/.auth.json
+.env

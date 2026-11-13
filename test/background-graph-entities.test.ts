@@ -1580,6 +1580,24 @@ describe('BackgroundGraphEntities', () => {
       expect(result[result.length - 1].value).toBe(2);
     });
 
+    it('should leave buckets before the first state as gaps instead of inventing a line', () => {
+      // Entity (or recorder data) only starts at 11:00, an hour into the 2 h window.
+      const states = [
+        { timestamp: new Date('2023-01-01T11:00:00Z'), value: 7 },
+        { timestamp: new Date('2023-01-01T11:30:00Z'), value: 9 },
+      ];
+
+      const result = downsampleHistory(states, hoursToShow, pointsPerHour);
+
+      // Anchor + buckets ending 10:30 and 11:00 hold no data.
+      expect(result[0].value).toBeNaN();
+      expect(result[1].value).toBeNaN();
+      expect(result[2].value).toBeNaN();
+      // From the first state on, real values.
+      expect(result[3].value).toBeCloseTo(7);
+      expect(result[4].value).toBeCloseTo(9);
+    });
+
     it('should return an empty array when no history is provided', () => {
       const states: { timestamp: Date; value: number }[] = [];
       const result = downsampleHistory(states, hoursToShow, pointsPerHour);
