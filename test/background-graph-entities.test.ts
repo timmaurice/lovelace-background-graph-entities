@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi, Mock, beforeAll } from 'vitest';
 import { HomeAssistant, BackgroundGraphEntitiesConfig } from '../src/types';
 import type { BackgroundGraphEntities as BackgroundGraphEntitiesType } from '../src/background-graph-entities';
-import { compileValueTransform, downsampleHistory, entityDisplayName, formatNumber } from '../src/utils';
+import {
+  MAX_DOWNSAMPLE_BUCKETS,
+  compileValueTransform,
+  downsampleHistory,
+  entityDisplayName,
+  formatNumber,
+} from '../src/utils';
 import { resolveEntity } from '../src/entity';
 
 // Mock console.info before the module is imported to prevent version logging.
@@ -1558,6 +1564,20 @@ describe('BackgroundGraphEntities', () => {
 
       // Subsequent buckets should be 0, as the value returned to 0.
       expect(result[2].value).toBe(0);
+    });
+
+    it('should cap the number of buckets for extreme hours_to_show * points_per_hour', () => {
+      const states = [
+        { timestamp: new Date(mockNow.getTime() - 8760 * 3600 * 1000), value: 1 },
+        { timestamp: new Date('2023-01-01T00:00:00Z'), value: 2 },
+      ];
+
+      const result = downsampleHistory(states, 8760, 60);
+
+      // Buckets plus the anchor point; uncapped this would be ~525,600.
+      expect(result.length).toBe(MAX_DOWNSAMPLE_BUCKETS + 1);
+      expect(result[result.length - 1].timestamp.getTime()).toBe(mockNow.getTime());
+      expect(result[result.length - 1].value).toBe(2);
     });
 
     it('should leave buckets before the first state as gaps instead of inventing a line', () => {

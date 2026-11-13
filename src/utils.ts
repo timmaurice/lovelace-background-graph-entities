@@ -33,6 +33,9 @@ export function positiveOr(value: number | string | undefined, fallback: number)
   return parsed !== undefined && parsed > 0 ? parsed : fallback;
 }
 
+/** Upper bound on buckets per series; more is invisible on a card-sized graph but costly to draw. */
+export const MAX_DOWNSAMPLE_BUCKETS = 10_000;
+
 /**
  * Downsamples historical data into evenly spaced buckets using a time-weighted average.
  *
@@ -53,7 +56,9 @@ export function downsampleHistory(
   const now = new Date();
   const windowStart = now.getTime() - hours * MS_IN_H;
   const windowEnd = now.getTime();
-  const interval = MS_IN_H / pointsPerHour;
+  // `hours_to_show * points_per_hour` is unbounded (8760 h at 60/h is ~525k buckets and
+  // blocks the main thread for seconds), so coarsen the grid once it exceeds the cap.
+  const interval = Math.max(MS_IN_H / pointsPerHour, (windowEnd - windowStart) / MAX_DOWNSAMPLE_BUCKETS);
   const numBuckets = Math.ceil((windowEnd - windowStart) / interval);
 
   // Accumulate per bucket in one pass over the states. Walking every state for
