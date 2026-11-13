@@ -25,3 +25,7 @@ test-results-ha/
 
 # Local machine compose override (corporate CA, local paths)
 docker-compose.override.yml
+
+# Local Claude Code files
+.claude/
+CLAUDE.md
