@@ -73,23 +73,30 @@ export async function ensureOnboarded(): Promise<void> {
     body: JSON.stringify(body),
   });
 
-  let token: string | undefined;
+  const exchange = async (authCode: string): Promise<string> => {
+    const tokenRes = await fetch(`${BASE_URL}/auth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: authCode, client_id: CLIENT_ID }),
+    });
+    if (!tokenRes.ok) throw new Error(`onboarding token exchange failed: ${tokenRes.status}`);
+    return ((await tokenRes.json()) as { access_token: string }).access_token;
+  };
+
+  let token: string;
   if (pending('user')) {
     const res = await fetch(
       `${BASE_URL}/api/onboarding/users`,
       json({ client_id: CLIENT_ID, name: 'Admin', username: USERNAME, password: PASSWORD, language: 'en' }),
     );
     if (!res.ok) throw new Error(`onboarding user step failed: ${res.status} ${await res.text()}`);
-    const { auth_code } = (await res.json()) as { auth_code: string };
-    const tokenRes = await fetch(`${BASE_URL}/auth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ grant_type: 'authorization_code', code: auth_code, client_id: CLIENT_ID }),
-    });
-    if (!tokenRes.ok) throw new Error(`onboarding token exchange failed: ${tokenRes.status}`);
-    token = ((await tokenRes.json()) as { access_token: string }).access_token;
+    token = await exchange(((await res.json()) as { auth_code: string }).auth_code);
+  } else {
+    // A previous run was aborted after creating the user. The onboarding API
+    // hands out no token for that step a second time, so sign in instead and
+    // finish the remaining steps - no need to wipe ha-config/ by hand.
+    token = await exchange(await loginForAuthCode(json));
   }
-  if (!token) throw new Error('Onboarding is partly done and no user token is available; remove ha-config/.');
 
   for (const [step, body] of [
     ['core_config', {}],
@@ -100,6 +107,28 @@ export async function ensureOnboarded(): Promise<void> {
     const res = await fetch(`${BASE_URL}/api/onboarding/${step}`, json(body, token));
     if (!res.ok) throw new Error(`onboarding step ${step} failed: ${res.status} ${await res.text()}`);
   }
+}
+
+/** Signs in through the login flow API with the suite's credentials and returns an auth code. */
+async function loginForAuthCode(json: (body: unknown) => RequestInit): Promise<string> {
+  const start = await fetch(
+    `${BASE_URL}/auth/login_flow`,
+    json({ client_id: CLIENT_ID, handler: ['homeassistant', null], redirect_uri: CLIENT_ID }),
+  );
+  if (!start.ok) throw new Error(`login flow could not be started: ${start.status}`);
+  const { flow_id } = (await start.json()) as { flow_id: string };
+  const done = await fetch(
+    `${BASE_URL}/auth/login_flow/${flow_id}`,
+    json({ client_id: CLIENT_ID, username: USERNAME, password: PASSWORD }),
+  );
+  const result = (await done.json()) as { type?: string; result?: string };
+  if (!done.ok || result.type !== 'create_entry' || !result.result) {
+    throw new Error(
+      `Onboarding is partly done and signing in as "${USERNAME}" failed; ` +
+        'set HA_E2E_USER/HA_E2E_PASSWORD to the existing credentials or remove ha-config/.',
+    );
+  }
+  return result.result;
 }
 
 /** Registers the built bundle as a Lovelace resource unless the instance has it already. */
