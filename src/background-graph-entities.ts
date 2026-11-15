@@ -1293,8 +1293,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // outdated window/config and must not overwrite the newer data.
     if (seq !== this._historyRequestSeq) return;
     // A failed fetch keeps the last good data instead of blanking every graph
-    // until the next interval.
+    // until the next interval. It also lets the next hass update retry, so a failed first
+    // fetch does not leave the graphs blank; hass updates pace the retries.
     if (history) this._history = history;
+    else this._historyFetched = false;
   }
 
   private async _fetchHistory(entityIds: string[]): Promise<HistoryMap | null> {

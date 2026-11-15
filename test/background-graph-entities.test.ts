@@ -517,6 +517,26 @@ describe('BackgroundGraphEntities', () => {
       expect(internals._history.get('sensor.test')?.raw[0].value).toBe(5);
     });
 
+    it('should retry a failed first fetch on the next hass update', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      (hass.callWS as Mock).mockRejectedValueOnce(new Error('ws down'));
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': [{ lu: 1_700_000_000, s: '5' }] });
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'], update_interval: 0 });
+      await element.updateComplete;
+      await new Promise((r) => setTimeout(r, 0));
+      errorSpy.mockRestore();
+      expect(hass.callWS).toHaveBeenCalledTimes(1);
+
+      element.hass = { ...hass };
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const history = (element as unknown as { _history: Map<string, { raw: { value: number }[] }> })._history;
+      expect(hass.callWS).toHaveBeenCalledTimes(2);
+      expect(history.get('sensor.test')?.raw[0].value).toBe(5);
+    });
+
     it('should ignore a stale history response that arrives after a newer one', async () => {
       (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': [{ lu: 1_700_000_000, s: '1' }] });
       element.hass = hass;
