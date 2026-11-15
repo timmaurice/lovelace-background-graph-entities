@@ -609,9 +609,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const graphEntityId = entityConfig.graph_entity || entityConfig.entity;
     const history = this._history.get(graphEntityId);
     const source = entityConfig.auto_icon_color_source ?? 'latest';
-    const value = this._pickHistoryValue(history, source, this._getTransform(entityConfig));
+    const transform = this._getTransform(entityConfig);
+    const value = this._pickHistoryValue(history, source, transform);
     if (value === undefined) return undefined;
-    return this._getDotColor(value, entityConfig);
+    // `latest` is the live state: the last history bucket is an average from the last fetch.
+    const liveNum = source === 'latest' ? coerceNumber(this.hass?.states[graphEntityId]?.state) : undefined;
+    const live = liveNum !== undefined && transform ? transform(liveNum) : liveNum;
+    return this._getDotColor(live !== undefined && Number.isFinite(live) ? live : value, entityConfig);
   }
 
   private _getSortedEntities(): EntityConfig[] {

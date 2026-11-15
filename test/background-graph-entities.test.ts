@@ -1874,6 +1874,37 @@ describe('BackgroundGraphEntities', () => {
       expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
     });
 
+    it('should color the icon from the live state, not the last history bucket', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': [{ lu: startTime.getTime() / 1000, s: '20' }] });
+      hass.states['sensor.test'].state = '30';
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 20, color: '#00ff00' },
+              { value: 30, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
+    });
+
     it('should fall back to icon_color when no history is available', async () => {
       (hass.callWS as Mock).mockResolvedValue({});
 
