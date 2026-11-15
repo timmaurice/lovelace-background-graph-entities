@@ -516,7 +516,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     source: 'latest' | 'max' | 'min' | 'avg' | 'median',
     transform?: ValueTransform,
   ): number | undefined {
-    const history = source === 'max' || source === 'min' ? historyData.raw : historyData.downsampled;
+    // Skip the start anchor of downsampled: it repeats the first bucket's value and would weigh it twice.
+    const history = source === 'max' || source === 'min' ? historyData.raw : historyData.downsampled.slice(1);
     if (!history || history.length === 0) return undefined;
     // Transform before aggregating: for a decreasing transform (e.g. `50 - x`)
     // the max of transformed values is not the transform of the raw max.

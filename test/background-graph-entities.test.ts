@@ -44,6 +44,14 @@ async function flushFrames(): Promise<void> {
   await vi.advanceTimersByTimeAsync(100);
 }
 
+// Hourly steps 0 → 30 → 90 ending at 11:30Z: with hours_to_show 3 and points_per_hour 1 the buckets
+// are [0, 30, 90] (avg 40, median 30). The start anchor repeats the 0 and must not count as a sample.
+const stepHistory = (): { lu: number; s: string }[] =>
+  ['08:30', '09:30', '10:30'].map((t, i) => ({
+    lu: new Date(`2023-01-01T${t}:00Z`).getTime() / 1000,
+    s: String([0, 30, 90][i]),
+  }));
+
 describe('BackgroundGraphEntities', () => {
   let element: BackgroundGraphEntitiesType;
   let hass: HomeAssistant;
@@ -2115,12 +2123,12 @@ describe('BackgroundGraphEntities', () => {
     });
 
     it('should display the average history value when value_source is avg', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [{ entity: 'sensor.test', value_source: 'avg' }],
       });
@@ -2129,18 +2137,18 @@ describe('BackgroundGraphEntities', () => {
       await flushFrames();
       await element.updateComplete;
 
-      // Downsampled history [30, 65, 55] → mean = 50.
+      // Buckets [0, 30, 90] → mean = 40 (30 if the start anchor counted).
       const primary = element.shadowRoot?.querySelector('.primary-value');
-      expect(primary?.textContent).toContain('50');
+      expect(primary?.textContent).toContain('40');
     });
 
     it('should display the median history value when value_source is median', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [{ entity: 'sensor.test', value_source: 'median' }],
       });
@@ -2149,9 +2157,9 @@ describe('BackgroundGraphEntities', () => {
       await flushFrames();
       await element.updateComplete;
 
-      // Downsampled history [30, 65, 55] → sorted [30, 55, 65] → median = 55.
+      // Buckets [0, 30, 90] → median = 30 (15 if the start anchor counted).
       const primary = element.shadowRoot?.querySelector('.primary-value');
-      expect(primary?.textContent).toContain('55');
+      expect(primary?.textContent).toContain('30');
     });
 
     it('should display the value_label after the primary value', async () => {
@@ -2996,12 +3004,12 @@ describe('BackgroundGraphEntities', () => {
     });
 
     it('should color the icon using the avg-of-history threshold', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [
           {
@@ -3022,16 +3030,16 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toContain('rgb(213, 43, 0)');
+      expect(icon?.getAttribute('style')).toContain('rgb(170, 85, 0)');
     });
 
     it('should color the icon using the median-of-history threshold', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [
           {
@@ -3052,7 +3060,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toContain('rgb(234, 21, 0)');
+      expect(icon?.getAttribute('style')).toContain('rgb(128, 128, 0)');
     });
   });
 
