@@ -333,8 +333,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       this._lastSortedEntityIds = sortedIds;
     }
 
-    // Rerender graphs when history data, edit mode, or entity order changes.
-    if (changedProperties.has('_history') || changedProperties.has('editMode') || orderChanged) {
+    // Rerender graphs when history data, config, edit mode, or entity order changes.
+    if (
+      changedProperties.has('_history') ||
+      changedProperties.has('_config') ||
+      changedProperties.has('editMode') ||
+      orderChanged
+    ) {
       // Defer rendering to the next frame to ensure the DOM is fully updated.
       requestAnimationFrame(() => this._renderAllGraphs());
     }

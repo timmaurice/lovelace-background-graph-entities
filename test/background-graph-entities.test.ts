@@ -3605,6 +3605,47 @@ describe('BackgroundGraphEntities', () => {
     });
   });
 
+  describe('Redrawing on config change', () => {
+    const base = { ...config, hours_to_show: 2, points_per_hour: 1 };
+
+    beforeEach(async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2023-01-01T11:30:00Z'));
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [
+          { lu: new Date('2023-01-01T09:30:00Z').getTime() / 1000, s: '5' },
+          { lu: new Date('2023-01-01T10:30:00Z').getTime() / 1000, s: '15' },
+        ],
+      });
+      element.hass = hass;
+      element.setConfig({ ...base, entities: ['sensor.test'], line_width: 3 });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Neither change touches the history signature, so no refetch triggers a redraw.
+    it('redraws with the new look when an appearance option changes', async () => {
+      element.setConfig({ ...base, entities: ['sensor.test'], line_width: 1 });
+      await element.updateComplete;
+      await flushFrames();
+
+      expect(element.shadowRoot?.querySelector('.graph-path')?.getAttribute('stroke-width')).toBe('1');
+    });
+
+    it('keeps the graphs when tile_style is toggled', async () => {
+      element.setConfig({ ...base, entities: ['sensor.test'], line_width: 3, tile_style: true });
+      await element.updateComplete;
+      await flushFrames();
+
+      expect(element.shadowRoot?.querySelectorAll('.graph-path')).toHaveLength(1);
+    });
+  });
+
   describe('History window across a DST switch', () => {
     const originalTz = process.env.TZ;
 
