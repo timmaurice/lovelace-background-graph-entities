@@ -44,6 +44,14 @@ async function flushFrames(): Promise<void> {
   await vi.advanceTimersByTimeAsync(100);
 }
 
+// Hourly steps 0 → 30 → 90 ending at 11:30Z: with hours_to_show 3 and points_per_hour 1 the buckets
+// are [0, 30, 90] (avg 40, median 30). The start anchor repeats the 0 and must not count as a sample.
+const stepHistory = (): { lu: number; s: string }[] =>
+  ['08:30', '09:30', '10:30'].map((t, i) => ({
+    lu: new Date(`2023-01-01T${t}:00Z`).getTime() / 1000,
+    s: String([0, 30, 90][i]),
+  }));
+
 describe('BackgroundGraphEntities', () => {
   let element: BackgroundGraphEntitiesType;
   let hass: HomeAssistant;
@@ -515,6 +523,26 @@ describe('BackgroundGraphEntities', () => {
       errorSpy.mockRestore();
 
       expect(internals._history.get('sensor.test')?.raw[0].value).toBe(5);
+    });
+
+    it('should retry a failed first fetch on the next hass update', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      (hass.callWS as Mock).mockRejectedValueOnce(new Error('ws down'));
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': [{ lu: 1_700_000_000, s: '5' }] });
+      element.hass = hass;
+      element.setConfig({ type: 'custom:background-graph-entities', entities: ['sensor.test'], update_interval: 0 });
+      await element.updateComplete;
+      await new Promise((r) => setTimeout(r, 0));
+      errorSpy.mockRestore();
+      expect(hass.callWS).toHaveBeenCalledTimes(1);
+
+      element.hass = { ...hass };
+      await element.updateComplete;
+      await element.updateComplete;
+
+      const history = (element as unknown as { _history: Map<string, { raw: { value: number }[] }> })._history;
+      expect(hass.callWS).toHaveBeenCalledTimes(2);
+      expect(history.get('sensor.test')?.raw[0].value).toBe(5);
     });
 
     it('should ignore a stale history response that arrives after a newer one', async () => {
@@ -1874,6 +1902,37 @@ describe('BackgroundGraphEntities', () => {
       expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
     });
 
+    it('should color the icon from the live state, not the last history bucket', async () => {
+      const startTime = new Date(mockNow.getTime() - 2 * 3600 * 1000);
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': [{ lu: startTime.getTime() / 1000, s: '20' }] });
+      hass.states['sensor.test'].state = '30';
+
+      element.hass = hass;
+      element.setConfig({
+        ...config,
+        hours_to_show: 2,
+        points_per_hour: 1,
+        entities: [
+          {
+            entity: 'sensor.test',
+            auto_icon_color: true,
+            overwrite_graph_appearance: true,
+            color_thresholds: [
+              { value: 20, color: '#00ff00' },
+              { value: 30, color: '#ff0000' },
+            ],
+          },
+        ],
+      });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+      await element.updateComplete;
+
+      const icon = element.shadowRoot?.querySelector('ha-state-icon');
+      expect(icon?.getAttribute('style')).toBe('color: rgb(255, 0, 0)');
+    });
+
     it('should fall back to icon_color when no history is available', async () => {
       (hass.callWS as Mock).mockResolvedValue({});
 
@@ -2064,12 +2123,12 @@ describe('BackgroundGraphEntities', () => {
     });
 
     it('should display the average history value when value_source is avg', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [{ entity: 'sensor.test', value_source: 'avg' }],
       });
@@ -2078,18 +2137,18 @@ describe('BackgroundGraphEntities', () => {
       await flushFrames();
       await element.updateComplete;
 
-      // Downsampled history [30, 65, 55] → mean = 50.
+      // Buckets [0, 30, 90] → mean = 40 (30 if the start anchor counted).
       const primary = element.shadowRoot?.querySelector('.primary-value');
-      expect(primary?.textContent).toContain('50');
+      expect(primary?.textContent).toContain('40');
     });
 
     it('should display the median history value when value_source is median', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [{ entity: 'sensor.test', value_source: 'median' }],
       });
@@ -2098,9 +2157,9 @@ describe('BackgroundGraphEntities', () => {
       await flushFrames();
       await element.updateComplete;
 
-      // Downsampled history [30, 65, 55] → sorted [30, 55, 65] → median = 55.
+      // Buckets [0, 30, 90] → median = 30 (15 if the start anchor counted).
       const primary = element.shadowRoot?.querySelector('.primary-value');
-      expect(primary?.textContent).toContain('55');
+      expect(primary?.textContent).toContain('30');
     });
 
     it('should display the value_label after the primary value', async () => {
@@ -2945,12 +3004,12 @@ describe('BackgroundGraphEntities', () => {
     });
 
     it('should color the icon using the avg-of-history threshold', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [
           {
@@ -2971,16 +3030,16 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toContain('rgb(213, 43, 0)');
+      expect(icon?.getAttribute('style')).toContain('rgb(170, 85, 0)');
     });
 
     it('should color the icon using the median-of-history threshold', async () => {
-      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': buildHistory() });
+      (hass.callWS as Mock).mockResolvedValue({ 'sensor.test': stepHistory() });
 
       element.hass = hass;
       element.setConfig({
         ...config,
-        hours_to_show: 2,
+        hours_to_show: 3,
         points_per_hour: 1,
         entities: [
           {
@@ -3001,7 +3060,7 @@ describe('BackgroundGraphEntities', () => {
       await element.updateComplete;
 
       const icon = element.shadowRoot?.querySelector('ha-state-icon');
-      expect(icon?.getAttribute('style')).toContain('rgb(234, 21, 0)');
+      expect(icon?.getAttribute('style')).toContain('rgb(128, 128, 0)');
     });
   });
 
@@ -3602,6 +3661,47 @@ describe('BackgroundGraphEntities', () => {
       // distorted the strokes.
       expect(element.shadowRoot?.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 250 50');
       Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 100 });
+    });
+  });
+
+  describe('Redrawing on config change', () => {
+    const base = { ...config, hours_to_show: 2, points_per_hour: 1 };
+
+    beforeEach(async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2023-01-01T11:30:00Z'));
+      (hass.callWS as Mock).mockResolvedValue({
+        'sensor.test': [
+          { lu: new Date('2023-01-01T09:30:00Z').getTime() / 1000, s: '5' },
+          { lu: new Date('2023-01-01T10:30:00Z').getTime() / 1000, s: '15' },
+        ],
+      });
+      element.hass = hass;
+      element.setConfig({ ...base, entities: ['sensor.test'], line_width: 3 });
+      await element.updateComplete;
+      await element.updateComplete;
+      await flushFrames();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Neither change touches the history signature, so no refetch triggers a redraw.
+    it('redraws with the new look when an appearance option changes', async () => {
+      element.setConfig({ ...base, entities: ['sensor.test'], line_width: 1 });
+      await element.updateComplete;
+      await flushFrames();
+
+      expect(element.shadowRoot?.querySelector('.graph-path')?.getAttribute('stroke-width')).toBe('1');
+    });
+
+    it('keeps the graphs when tile_style is toggled', async () => {
+      element.setConfig({ ...base, entities: ['sensor.test'], line_width: 3, tile_style: true });
+      await element.updateComplete;
+      await flushFrames();
+
+      expect(element.shadowRoot?.querySelectorAll('.graph-path')).toHaveLength(1);
     });
   });
 

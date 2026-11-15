@@ -333,8 +333,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
       this._lastSortedEntityIds = sortedIds;
     }
 
-    // Rerender graphs when history data, edit mode, or entity order changes.
-    if (changedProperties.has('_history') || changedProperties.has('editMode') || orderChanged) {
+    // Rerender graphs when history data, config, edit mode, or entity order changes.
+    if (
+      changedProperties.has('_history') ||
+      changedProperties.has('_config') ||
+      changedProperties.has('editMode') ||
+      orderChanged
+    ) {
       // Defer rendering to the next frame to ensure the DOM is fully updated.
       requestAnimationFrame(() => this._renderAllGraphs());
     }
@@ -511,7 +516,8 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     source: 'latest' | 'max' | 'min' | 'avg' | 'median',
     transform?: ValueTransform,
   ): number | undefined {
-    const history = source === 'max' || source === 'min' ? historyData.raw : historyData.downsampled;
+    // Skip the start anchor of downsampled: it repeats the first bucket's value and would weigh it twice.
+    const history = source === 'max' || source === 'min' ? historyData.raw : historyData.downsampled.slice(1);
     if (!history || history.length === 0) return undefined;
     // Transform before aggregating: for a decreasing transform (e.g. `50 - x`)
     // the max of transformed values is not the transform of the raw max.
@@ -604,9 +610,13 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     const graphEntityId = entityConfig.graph_entity || entityConfig.entity;
     const history = this._history.get(graphEntityId);
     const source = entityConfig.auto_icon_color_source ?? 'latest';
-    const value = this._pickHistoryValue(history, source, this._getTransform(entityConfig));
+    const transform = this._getTransform(entityConfig);
+    const value = this._pickHistoryValue(history, source, transform);
     if (value === undefined) return undefined;
-    return this._getDotColor(value, entityConfig);
+    // `latest` is the live state: the last history bucket is an average from the last fetch.
+    const liveNum = source === 'latest' ? coerceNumber(this.hass?.states[graphEntityId]?.state) : undefined;
+    const live = liveNum !== undefined && transform ? transform(liveNum) : liveNum;
+    return this._getDotColor(live !== undefined && Number.isFinite(live) ? live : value, entityConfig);
   }
 
   private _getSortedEntities(): EntityConfig[] {
@@ -1284,8 +1294,10 @@ export class BackgroundGraphEntities extends LitElement implements LovelaceCard 
     // outdated window/config and must not overwrite the newer data.
     if (seq !== this._historyRequestSeq) return;
     // A failed fetch keeps the last good data instead of blanking every graph
-    // until the next interval.
+    // until the next interval. It also lets the next hass update retry, so a failed first
+    // fetch does not leave the graphs blank; hass updates pace the retries.
     if (history) this._history = history;
+    else this._historyFetched = false;
   }
 
   private async _fetchHistory(entityIds: string[]): Promise<HistoryMap | null> {
